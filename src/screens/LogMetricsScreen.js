@@ -17,6 +17,28 @@ import {
   getRatioStatus,
 } from '../utils/storage';
 
+// Expandable help tip component
+function HelpTip({ title, children }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={styles.helpTip}>
+      <TouchableOpacity
+        style={styles.helpHeader}
+        onPress={() => setExpanded(!expanded)}
+      >
+        <Text style={styles.helpIcon}>{expanded ? '▼' : '▶'}</Text>
+        <Text style={styles.helpTitle}>{title}</Text>
+      </TouchableOpacity>
+      {expanded && (
+        <View style={styles.helpContent}>
+          {children}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function LogMetricsScreen({ navigation }) {
   const [glucose, setGlucose] = useState('');
   const [ketones, setKetones] = useState('');
@@ -122,6 +144,20 @@ export default function LogMetricsScreen({ navigation }) {
               placeholder="e.g. 4.7"
               placeholderTextColor="#9ca3af"
             />
+            <HelpTip title="💡 How to measure glucose">
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>When to measure:</Text> First thing in the morning, after 12+ hours of fasting (no food or drinks except water).
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Normal range:</Text> 3.9-5.6 mmol/L (70-100 mg/dL) for non-diabetics.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Keto target:</Text> Aim for 3.3-5.0 mmol/L (60-90 mg/dL) for optimal ketosis.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Device:</Text> Use a blood glucose meter with test strips. Prick your finger and apply blood to the strip.
+              </Text>
+            </HelpTip>
           </View>
 
           <View style={styles.inputGroup}>
@@ -134,16 +170,50 @@ export default function LogMetricsScreen({ navigation }) {
               placeholder="e.g. 1.2"
               placeholderTextColor="#9ca3af"
             />
+            <HelpTip title="💡 How to measure ketones">
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>When to measure:</Text> Same time as glucose (fasting), using the same finger prick for convenience.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Blood ketones (most accurate):</Text> Use a blood ketone meter with ketone test strips. Range: 0.5-3.0 mmol/L indicates nutritional ketosis.
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Alternatives:</Text> Breath meters (less accurate) or urine strips (cheapest but unreliable for long-term keto).
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Keto target:</Text> 1.0-3.0 mmol/L is optimal for therapeutic ketosis. Higher isn't always better.
+              </Text>
+            </HelpTip>
           </View>
 
           {ratio !== null && (
-            <View style={[styles.ratioCard, { borderColor: getRatioColor(ratio) }]}>
-              <Text style={styles.ratioLabel}>Dr. Boz Ratio</Text>
-              <Text style={[styles.ratioValue, { color: getRatioColor(ratio) }]}>
-                {ratio}
-              </Text>
-              <Text style={styles.ratioStatus}>{getRatioStatus(ratio)}</Text>
-            </View>
+            <>
+              <View style={[styles.ratioCard, { borderColor: getRatioColor(ratio) }]}>
+                <Text style={styles.ratioLabel}>Dr. Boz Ratio</Text>
+                <Text style={[styles.ratioValue, { color: getRatioColor(ratio) }]}>
+                  {ratio}
+                </Text>
+                <Text style={styles.ratioStatus}>{getRatioStatus(ratio)}</Text>
+              </View>
+              <HelpTip title="💡 Understanding the Dr. Boz Ratio">
+                <Text style={styles.helpText}>
+                  <Text style={styles.helpBold}>Formula:</Text> Glucose (mmol/L) ÷ Ketones (mmol/L)
+                </Text>
+                <Text style={styles.helpText}>
+                  <Text style={styles.helpBold}>What it means:</Text> This ratio indicates how well your metabolism is adapted to burning fat for fuel. Lower ratios = deeper ketosis and more autophagy.
+                </Text>
+                <Text style={styles.helpText}>
+                  <Text style={styles.helpBold}>Target ranges:</Text>
+                  {'\n'}• Under 40: Excellent - maximum healing and autophagy
+                  {'\n'}• 40-80: Good - therapeutic ketosis
+                  {'\n'}• 80-100: Fair - light ketosis, room for improvement
+                  {'\n'}• Over 100: Not in therapeutic ketosis yet
+                </Text>
+                <Text style={styles.helpText}>
+                  <Text style={styles.helpBold}>Example:</Text> Glucose 4.5 ÷ Ketones 1.5 = Ratio of 30 (Excellent!)
+                </Text>
+              </HelpTip>
+            </>
           )}
         </View>
 
@@ -173,6 +243,17 @@ export default function LogMetricsScreen({ navigation }) {
               placeholder="e.g. 8"
               placeholderTextColor="#9ca3af"
             />
+            <HelpTip title="💡 Tracking energy levels">
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Scale:</Text> 1 = Exhausted, can barely function; 10 = Peak energy, unstoppable
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>When to assess:</Text> Mid-afternoon (2-4 PM) when energy typically dips
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>What to look for:</Text> As you progress through ketosis, you should notice sustained energy without crashes, especially after the initial "keto flu" adaptation period.
+              </Text>
+            </HelpTip>
           </View>
 
           <View style={styles.inputGroup}>
@@ -185,6 +266,17 @@ export default function LogMetricsScreen({ navigation }) {
               placeholder="e.g. 9"
               placeholderTextColor="#9ca3af"
             />
+            <HelpTip title="💡 Tracking mental clarity">
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>Scale:</Text> 1 = Brain fog, can't focus; 10 = Crystal clear thinking, laser focus
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>When to assess:</Text> During your most mentally demanding tasks (work, study, problem-solving)
+              </Text>
+              <Text style={styles.helpText}>
+                <Text style={styles.helpBold}>What to look for:</Text> Many people report enhanced mental clarity and focus as a major benefit of ketosis. Ketones provide stable brain fuel without glucose spikes/crashes.
+              </Text>
+            </HelpTip>
           </View>
         </View>
 
@@ -287,5 +379,45 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  helpTip: {
+    marginTop: 8,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563eb',
+    overflow: 'hidden',
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  helpIcon: {
+    fontSize: 12,
+    color: '#2563eb',
+    marginRight: 8,
+    fontWeight: 'bold',
+  },
+  helpTitle: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '600',
+    flex: 1,
+  },
+  helpContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 4,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  helpBold: {
+    fontWeight: '700',
+    color: '#111827',
   },
 });
