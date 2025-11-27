@@ -1,9 +1,73 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, subDays, parseISO, differenceInDays } from 'date-fns';
+import { getCurrentUser } from '../services/authService';
+import * as FirestoreService from '../services/firestoreService';
 
 const STORAGE_KEYS = {
   USER_PROFILE: 'user_profile',
   DAILY_METRICS: 'daily_metrics',
+  USE_CLOUD_SYNC: 'use_cloud_sync',
+};
+
+/**
+ * Check if cloud sync is enabled and user is logged in
+ */
+const shouldUseCloud = async () => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return false;
+
+    const cloudSync = await AsyncStorage.getItem(STORAGE_KEYS.USE_CLOUD_SYNC);
+    return cloudSync === 'true';
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
+ * Enable or disable cloud sync
+ */
+export const setCloudSync = async (enabled) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.USE_CLOUD_SYNC, enabled ? 'true' : 'false');
+
+    // If enabling cloud sync, migrate local data to Firebase
+    if (enabled) {
+      await migrateLocalDataToCloud();
+    }
+  } catch (error) {
+    console.error('Error setting cloud sync:', error);
+  }
+};
+
+/**
+ * Migrate local data to Firebase
+ */
+const migrateLocalDataToCloud = async () => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    // Migrate profile
+    const localProfile = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (localProfile) {
+      const profile = JSON.parse(localProfile);
+      await FirestoreService.saveUserProfile(user.uid, profile);
+    }
+
+    // Migrate metrics
+    const localMetrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
+    if (localMetrics) {
+      const metrics = JSON.parse(localMetrics);
+      for (const metric of metrics) {
+        await FirestoreService.saveDailyMetric(user.uid, metric);
+      }
+    }
+
+    console.log('Successfully migrated local data to cloud');
+  } catch (error) {
+    console.error('Error migrating data to cloud:', error);
+  }
 };
 
 // Default user profile
@@ -92,6 +156,19 @@ export const PHASES = {
 
 export const getUserProfile = async () => {
   try {
+    // Check if should use cloud storage
+    if (await shouldUseCloud()) {
+      const user = getCurrentUser();
+      const result = await FirestoreService.getUserProfile(user.uid);
+
+      if (result.success && result.profile) {
+        // Cache to local storage
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(result.profile));
+        return result.profile;
+      }
+    }
+
+    // Fallback to local storage
     const profile = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
     return profile ? JSON.parse(profile) : DEFAULT_PROFILE;
   } catch (error) {
@@ -102,7 +179,14 @@ export const getUserProfile = async () => {
 
 export const saveUserProfile = async (profile) => {
   try {
+    // Save to local storage (always)
     await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+
+    // Also save to cloud if enabled
+    if (await shouldUseCloud()) {
+      const user = getCurrentUser();
+      await FirestoreService.saveUserProfile(user.uid, profile);
+    }
   } catch (error) {
     console.error('Error saving profile:', error);
   }
@@ -110,6 +194,19 @@ export const saveUserProfile = async (profile) => {
 
 export const getDailyMetrics = async () => {
   try {
+    // Check if should use cloud storage
+    if (await shouldUseCloud()) {
+      const user = getCurrentUser();
+      const result = await FirestoreService.getAllMetrics(user.uid);
+
+      if (result.success && result.metrics) {
+        // Cache to local storage
+        await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(result.metrics));
+        return result.metrics;
+      }
+    }
+
+    // Fallback to local storage
     const metrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
     return metrics ? JSON.parse(metrics) : [];
   } catch (error) {
@@ -120,20 +217,30 @@ export const getDailyMetrics = async () => {
 
 export const saveDailyMetric = async (metric) => {
   try {
-    const metrics = await getDailyMetrics();
     const date = metric.date || format(new Date(), 'yyyy-MM-dd');
-    
+    const metricWithDate = { ...metric, date };
+
+    // Save to local storage (always)
+    const metrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
+    const existingMetrics = metrics ? JSON.parse(metrics) : [];
+
     // Remove existing entry for this date
-    const filtered = metrics.filter(m => m.date !== date);
-    
+    const filtered = existingMetrics.filter(m => m.date !== date);
+
     // Add new entry
-    const newMetrics = [...filtered, { ...metric, date }];
-    
+    const newMetrics = [...filtered, metricWithDate];
+
     // Sort by date descending
     newMetrics.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
+
     await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
-    
+
+    // Also save to cloud if enabled
+    if (await shouldUseCloud()) {
+      const user = getCurrentUser();
+      await FirestoreService.saveDailyMetric(user.uid, metricWithDate);
+    }
+
     return newMetrics;
   } catch (error) {
     console.error('Error saving metric:', error);
