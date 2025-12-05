@@ -1,122 +1,66 @@
-# Quick Start - Get Running in 5 Minutes
+# Quick Start Guide
 
-## Option 1: Fastest (Using Expo Go App)
+## Starting the App
 
-**Time: 2 minutes**
-
-1. **On your computer:**
-   ```bash
-   cd /home/claude/keto-tracker
-   ./setup.sh
-   npm start
-   ```
-
-2. **On your Pixel 8:**
-   - Install "Expo Go" from Google Play Store
-   - Open Expo Go app
-   - Scan the QR code shown in terminal
-   - App launches instantly!
-
-**Pros:** Instant testing, no build process
-**Cons:** Can't create standalone APK
-
----
-
-## Option 2: Direct Install (Development Build)
-
-**Time: 5 minutes**
-
-1. **Enable USB Debugging on Pixel 8:**
-   - Settings → About phone → Tap "Build number" 7 times
-   - Settings → System → Developer options → Enable "USB debugging"
-
-2. **Connect & Deploy:**
-   ```bash
-   cd /home/claude/keto-tracker
-   ./setup.sh
-   
-   # Verify device connected
-   adb devices
-   
-   # Build and install
-   npm start
-   # Press 'a' when prompted
-   ```
-
-**Pros:** Real app experience, faster than Expo Go
-**Cons:** Takes 3-5 minutes first build
-
----
-
-## Option 3: Production APK (Standalone)
-
-**Time: 10-15 minutes (first time)**
-
+### Method 1: Use the Start Script (Recommended)
 ```bash
-cd /home/claude/keto-tracker
-npm install -g eas-cli
-
-# Create account (if needed)
-eas login
-
-# Build APK
-eas build --platform android --profile preview
-
-# After build completes, download and install
-adb install path/to/app.apk
+./start.sh
 ```
 
-**Pros:** True standalone app, can share APK
-**Cons:** Requires Expo account, longer build time
+This script automatically:
+- Loads nvm if available
+- Uses the Node.js version from `.nvmrc`
+- Starts the Expo development server
 
----
-
-## Recommended Path
-
-1. **Start with Option 1** (Expo Go) - Test immediately
-2. **Move to Option 2** if you want faster performance
-3. **Use Option 3** when ready for production
-
-## Common Issues
-
-### "adb: command not found"
+### Method 2: Manual Start
 ```bash
-# Mac
-brew install android-platform-tools
+# First, ensure nvm is loaded
+source ~/.nvm/nvm.sh
 
-# Linux
-sudo apt-get install android-tools-adb
+# Then start the app
+npm start
 ```
 
-### Device not showing in adb devices
-- Disconnect and reconnect USB
-- Accept USB debugging prompt on phone
-- Try different USB cable
-
-### Metro bundler won't start
+### Method 3: Using direnv (Auto-loads nvm)
+If you have `direnv` installed:
 ```bash
-npx expo start -c
+# Allow direnv in this directory (one-time)
+direnv allow
+
+# Now nvm will auto-load when you cd into this directory
+npm start
 ```
 
-## What to Test First
+## Platform-Specific Starts
 
-1. ✅ Open app → See Phase 1 card on Home screen
-2. ✅ Tap "Log Metrics" → Enter glucose (85) and ketones (1.0)
-3. ✅ See Dr. Boz Ratio calculate to 85
-4. ✅ Save → Return to Home → See today's ratio
-5. ✅ Navigate to "Analytics" → (Will show data after 2-3 days)
-6. ✅ Navigate to "Current Phase" → See all 12 phases
+### Web
+```bash
+./start.sh start -- --web
+# or
+npm start -- --web
+```
 
-## Next Steps After Testing
+### Android
+```bash
+./start.sh start -- --android
+# or
+npm start -- --android
+```
 
-- Log metrics daily for 3-5 days to see chart populate
-- Watch phase auto-advance after duration completes
-- Test with different glucose/ketone values
-- Verify data persists after closing app
+### iOS
+```bash
+./start.sh start -- --ios
+# or
+npm start -- --ios
+```
 
-## Support
+## Troubleshooting
 
-If setup fails, check:
-1. Node.js version: `node --version` (needs v18+)
-2. Dependencies installed: `npm ls` (should show no errors)
-3. Metro bundler output for specific error messages
+### "npm: command not found"
+The start script should handle this automatically. If you still get this error:
+1. Make sure nvm is installed: `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash`
+2. Restart your terminal
+3. Use `./start.sh` instead of `npm start` directly
+
+### Node Version Issues
+The project uses Node.js v22.18.0 (specified in `.nvmrc`). The start script will automatically use this version if nvm is available.

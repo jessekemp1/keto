@@ -51,7 +51,14 @@ Minimal viable product for tracking ketogenic diet progress through Dr. Boz's 12
 
 3. **Start Expo development server**
    ```bash
-   npx expo start
+   # Option 1: Use the start script (handles nvm automatically)
+   ./start.sh
+   
+   # Option 2: Manual start (if nvm is already loaded)
+   npm start
+   
+   # Option 3: For web specifically
+   ./start.sh start -- --web
    ```
 
 4. **Connect your Pixel 8**
