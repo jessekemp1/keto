@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import LogMetricsScreen from './src/screens/LogMetricsScreen';
@@ -15,12 +16,13 @@ const Tab = createBottomTabNavigator();
 
 function AppContent() {
   const { user, loading, initializing } = useAuth();
+  const { theme, loading: themeLoading } = useTheme();
 
-  // Show loading spinner while checking auth state
-  if (loading || initializing) {
+  // Show loading spinner while checking auth state or loading theme
+  if (loading || initializing || themeLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
@@ -42,12 +44,12 @@ function AppContent() {
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#2563eb',
-          tabBarInactiveTintColor: '#9ca3af',
+          tabBarActiveTintColor: theme.colors.accent,
+          tabBarInactiveTintColor: theme.colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: '#ffffff',
+            backgroundColor: theme.colors.card,
             borderTopWidth: 1,
-            borderTopColor: '#f3f4f6',
+            borderTopColor: theme.colors.border,
             paddingTop: 8,
             paddingBottom: 8,
             height: 60,
@@ -57,16 +59,16 @@ function AppContent() {
             fontWeight: '600',
           },
           headerStyle: {
-            backgroundColor: '#ffffff',
+            backgroundColor: theme.colors.card,
             borderBottomWidth: 1,
-            borderBottomColor: '#f3f4f6',
+            borderBottomColor: theme.colors.border,
             elevation: 0,
             shadowOpacity: 0,
           },
           headerTitleStyle: {
             fontWeight: '700',
             fontSize: 18,
-            color: '#111827',
+            color: theme.colors.text,
           },
         }}
       >
@@ -98,8 +100,10 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <AppContent />
+      <ThemeProvider>
+        <StatusBar style="dark" />
+        <AppContent />
+      </ThemeProvider>
     </AuthProvider>
   );
 }
@@ -109,6 +113,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
   },
 });

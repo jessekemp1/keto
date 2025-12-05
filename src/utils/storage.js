@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   DAILY_METRICS: 'daily_metrics',
   USE_CLOUD_SYNC: 'use_cloud_sync',
   HAS_MIGRATED_TO_CLOUD: 'has_migrated_to_cloud',
+  USER_THEME: 'user_theme',
 };
 
 /**
@@ -618,5 +619,29 @@ export const generateSampleData = async () => {
   } catch (error) {
     console.error('Error generating sample data:', error);
     return { success: false, message: 'Failed to generate sample data. Please try again.' };
+  }
+};
+
+/**
+ * Get user's selected theme name
+ */
+export const getUserTheme = async () => {
+  try {
+    const theme = await AsyncStorage.getItem(STORAGE_KEYS.USER_THEME);
+    return theme || 'Modern Minimal';
+  } catch (error) {
+    console.error('Error loading user theme:', error);
+    return 'Modern Minimal';
+  }
+};
+
+/**
+ * Save user's selected theme name
+ */
+export const saveUserTheme = async (themeName) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_THEME, themeName);
+  } catch (error) {
+    console.error('Error saving user theme:', error);
   }
 };
