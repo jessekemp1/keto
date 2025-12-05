@@ -10,7 +10,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import { format, parseISO } from 'date-fns';
-import { getRecentMetrics, getRatioColor } from '../utils/storage';
+import { getRecentMetrics, getDailyMetrics, getRatioColor } from '../utils/storage';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -20,8 +20,9 @@ export default function AnalyticsScreen() {
 
   const loadMetrics = async () => {
     try {
-      const data = await getRecentMetrics(7);
-      setMetrics(data);
+      // Get all historical metrics, not just last 7 days
+      const allData = await getDailyMetrics();
+      setMetrics(allData);
     } catch (error) {
       console.error('Error loading metrics:', error);
     }
@@ -44,8 +45,20 @@ export default function AnalyticsScreen() {
       return null;
     }
 
-    const labels = metrics.map((m) => format(parseISO(m.date), 'MM/dd'));
-    const ratios = metrics.map((m) => m.drBozRatio || 0);
+    // Show last 30 days on chart for readability, but all data in list
+    const recentMetrics = metrics
+      .filter(m => {
+        const daysDiff = Math.floor((new Date() - parseISO(m.date)) / (1000 * 60 * 60 * 24));
+        return daysDiff <= 30;
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (recentMetrics.length === 0) {
+      return null;
+    }
+
+    const labels = recentMetrics.map((m) => format(parseISO(m.date), 'MM/dd'));
+    const ratios = recentMetrics.map((m) => m.drBozRatio || 0);
 
     return {
       labels,
@@ -89,7 +102,7 @@ export default function AnalyticsScreen() {
       }
     >
       <View style={styles.content}>
-        <Text style={styles.title}>7-Day Progress</Text>
+        <Text style={styles.title}>Progress History</Text>
 
         {chartData ? (
           <>
@@ -150,7 +163,7 @@ export default function AnalyticsScreen() {
                     </Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>7-Day Avg</Text>
+                    <Text style={styles.statLabel}>All-Time Avg</Text>
                     <Text
                       style={[
                         styles.statValue,
@@ -187,10 +200,10 @@ export default function AnalyticsScreen() {
             )}
 
             <View style={styles.dataCard}>
-              <Text style={styles.dataTitle}>Recent Entries</Text>
+              <Text style={styles.dataTitle}>All Entries ({metrics.length} total)</Text>
               {metrics
                 .slice()
-                .reverse()
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
                 .map((metric, index) => (
                   <View key={index} style={styles.dataRow}>
                     <Text style={styles.dataDate}>
