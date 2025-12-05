@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import 'react-native-gesture-handler';
+import React, { useState } from 'react';
+import { View, ActivityIndicator, StyleSheet, TouchableOpacity, Text, Modal, SafeAreaView } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -12,7 +13,71 @@ import LogMetricsScreen from './src/screens/LogMetricsScreen';
 import PhaseInfoScreen from './src/screens/PhaseInfoScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
-const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+function TopNavigationBar({ navigation, currentRoute, theme }) {
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const menuItems = [
+    { name: 'Home', route: 'Home', title: 'Continuum' },
+    { name: 'Log', route: 'Log', title: 'Log' },
+    { name: 'Phase', route: 'Phase', title: 'Phase' },
+    { name: 'Settings', route: 'Settings', title: 'Settings' },
+  ];
+
+  const currentTitle = menuItems.find(item => item.route === currentRoute)?.title || 'Keto Tracker';
+
+  return (
+    <SafeAreaView style={[styles.topBar, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+      <TouchableOpacity
+        style={styles.menuButton}
+        onPress={() => setMenuVisible(true)}
+      >
+        <Text style={[styles.menuIcon, { color: theme.colors.text }]}>☰</Text>
+      </TouchableOpacity>
+      <Text style={[styles.topBarTitle, { color: theme.colors.text }]}>{currentTitle}</Text>
+      <View style={styles.topBarSpacer} />
+      
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={[styles.menuContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.route}
+                style={[
+                  styles.menuItem,
+                  { borderBottomColor: theme.colors.border },
+                  currentRoute === item.route && { backgroundColor: theme.colors.accentBackground }
+                ]}
+                onPress={() => {
+                  navigation.navigate(item.route);
+                  setMenuVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.menuItemText,
+                  { color: theme.colors.text },
+                  currentRoute === item.route && { color: theme.colors.accent, fontWeight: '700' }
+                ]}>
+                  {item.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </SafeAreaView>
+  );
+}
 
 function AppContent() {
   const { user, loading, initializing } = useAuth();
@@ -42,57 +107,33 @@ function AppContent() {
   // Show main app if authenticated
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          tabBarActiveTintColor: theme.colors.accent,
-          tabBarInactiveTintColor: theme.colors.textSecondary,
-          tabBarStyle: {
-            backgroundColor: theme.colors.card,
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            paddingTop: 8,
-            paddingBottom: 8,
-            height: 60,
-          },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '600',
-          },
-          headerStyle: {
-            backgroundColor: theme.colors.card,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 18,
-            color: theme.colors.text,
-          },
-        }}
-      >
-        <Tab.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{ title: 'Continuum' }}
-        />
-        <Tab.Screen
-          name="Log"
-          component={LogMetricsScreen}
-          options={{ title: 'Log' }}
-        />
-        <Tab.Screen
-          name="Phase"
-          component={PhaseInfoScreen}
-          options={{ title: 'Phase' }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: 'Settings' }}
-        />
-      </Tab.Navigator>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <Stack.Navigator
+          screenOptions={{
+            header: ({ navigation, route }) => {
+              return <TopNavigationBar navigation={navigation} currentRoute={route.name} theme={theme} />;
+            },
+            headerShown: true,
+          }}
+        >
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+          />
+          <Stack.Screen
+            name="Log"
+            component={LogMetricsScreen}
+          />
+          <Stack.Screen
+            name="Phase"
+            component={PhaseInfoScreen}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+          />
+        </Stack.Navigator>
+      </View>
     </NavigationContainer>
   );
 }
@@ -113,5 +154,54 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    height: 56,
+  },
+  menuButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  menuIcon: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+  },
+  topBarSpacer: {
+    width: 40, // Balance the menu button width
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    paddingTop: 56,
+  },
+  menuContainer: {
+    marginHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

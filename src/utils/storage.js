@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   USE_CLOUD_SYNC: 'use_cloud_sync',
   HAS_MIGRATED_TO_CLOUD: 'has_migrated_to_cloud',
   USER_THEME: 'user_theme',
+  CUSTOM_THEME_COLORS: 'custom_theme_colors',
 };
 
 /**
@@ -643,5 +644,29 @@ export const saveUserTheme = async (themeName) => {
     await AsyncStorage.setItem(STORAGE_KEYS.USER_THEME, themeName);
   } catch (error) {
     console.error('Error saving user theme:', error);
+  }
+};
+
+/**
+ * Get custom theme colors
+ */
+export const getCustomThemeColors = async () => {
+  try {
+    const colors = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_THEME_COLORS);
+    return colors ? JSON.parse(colors) : null;
+  } catch (error) {
+    console.error('Error loading custom theme colors:', error);
+    return null;
+  }
+};
+
+/**
+ * Save custom theme colors
+ */
+export const saveCustomThemeColors = async (colors) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_THEME_COLORS, JSON.stringify(colors));
+  } catch (error) {
+    console.error('Error saving custom theme colors:', error);
   }
 };

@@ -11,13 +11,12 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import AuthScreen from './AuthScreen';
-import { generateSampleData, exportMetricsToCSV } from '../utils/storage';
+import { exportMetricsToCSV } from '../utils/storage';
 
 export default function SettingsScreen() {
   const { user, signOut: contextSignOut, loading: authLoading } = useAuth();
   const { theme, themeName, changeTheme, availableThemes } = useTheme();
   const [showAuth, setShowAuth] = useState(false);
-  const [generatingData, setGeneratingData] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -50,34 +49,6 @@ export default function SettingsScreen() {
       console.error('Sign out error:', error);
       window.alert('Failed to sign out. Please try again.');
     }
-  };
-
-  const handleGenerateSampleData = () => {
-    Alert.alert(
-      'Generate Sample Data',
-      'This will create 14 days of sample historical data showing progress over time. Existing data will be preserved.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            setGeneratingData(true);
-            const result = await generateSampleData();
-            setGeneratingData(false);
-            
-            if (result.success) {
-              Alert.alert(
-                'Success!',
-                result.message,
-                [{ text: 'OK' }]
-              );
-            } else {
-              Alert.alert('Error', result.message);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleExportData = async () => {
@@ -245,19 +216,6 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {/* App Info */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>About</Text>
-          <View style={[styles.card, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-            <Text style={[styles.appTitle, { color: theme.colors.accent }]}>Keto Tracker</Text>
-            <Text style={[styles.appDescription, { color: theme.colors.textSecondary }]}>
-              Track your ketogenic journey using Dr. Boz's 12-phase continuum.
-              Monitor glucose, ketones, and your Dr. Boz Ratio to optimize metabolic health.
-            </Text>
-            <Text style={[styles.appVersion, { color: theme.colors.textSecondary }]}>Version 1.0.0</Text>
-          </View>
-        </View>
-
         {/* Data Management */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Data Management</Text>
@@ -307,33 +265,6 @@ export default function SettingsScreen() {
               </>
             )}
           </View>
-        </View>
-
-        {/* Development Tools */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Development</Text>
-          <TouchableOpacity
-            style={[
-              styles.button, 
-              styles.devButton, 
-              { 
-                backgroundColor: theme.colors.accentBackground,
-                borderColor: theme.colors.accent,
-              },
-              generatingData && styles.buttonDisabled
-            ]}
-            onPress={handleGenerateSampleData}
-            disabled={generatingData}
-          >
-            {generatingData ? (
-              <ActivityIndicator color={theme.colors.accent} />
-            ) : (
-              <Text style={[styles.devButtonText, { color: theme.colors.accent }]}>Generate Sample Historical Data</Text>
-            )}
-          </TouchableOpacity>
-          <Text style={[styles.devHelpText, { color: theme.colors.textSecondary }]}>
-            Creates 14 days of sample data showing realistic progress from higher to lower Dr. Boz Ratios.
-          </Text>
         </View>
       </View>
     </ScrollView>
@@ -477,19 +408,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  appTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  appDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  appVersion: {
-    fontSize: 12,
-  },
   infoCard: {
     borderRadius: 12,
     padding: 16,
@@ -503,18 +421,5 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  devButton: {
-    borderWidth: 2,
-    marginBottom: 8,
-  },
-  devButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  devHelpText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    paddingHorizontal: 4,
   },
 });

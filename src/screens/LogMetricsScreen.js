@@ -24,6 +24,17 @@ import {
 const WebDateInput = ({ value, max, onChange, style, theme }) => {
   if (Platform.OS !== 'web') return null;
   
+  // Determine if this is a terminal theme
+  const isTerminalTheme = theme?.themeName && (
+    theme.themeName.includes('Terminal') || 
+    theme.themeName === 'Naval Console' ||
+    theme.themeName === 'Custom' && theme.colors?.text?.match(/^#[0-9a-f]{6}$/i) // Check if custom theme has terminal-like colors
+  );
+  
+  const fontFamily = isTerminalTheme 
+    ? "'Courier New', 'Monaco', 'Menlo', 'Consolas', monospace"
+    : 'inherit';
+  
   return React.createElement('input', {
     type: 'date',
     value: value,
@@ -37,7 +48,7 @@ const WebDateInput = ({ value, max, onChange, style, theme }) => {
       borderRadius: '6px',
       backgroundColor: theme?.colors?.card || '#ffffff',
       color: theme?.colors?.text || '#1e40af',
-      fontFamily: 'inherit',
+      fontFamily: fontFamily,
       ...style,
     },
   });
@@ -66,7 +77,7 @@ function HelpTip({ title, children, theme }) {
 }
 
 export default function LogMetricsScreen({ navigation, route }) {
-  const { theme } = useTheme();
+  const { theme, themeName } = useTheme();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [glucose, setGlucose] = useState('');
   const [ketones, setKetones] = useState('');
@@ -209,7 +220,7 @@ export default function LogMetricsScreen({ navigation, route }) {
                 value={selectedDate}
                 max={format(new Date(), 'yyyy-MM-dd')}
                 onChange={setSelectedDate}
-                theme={theme}
+                theme={{ ...theme, themeName }}
               />
             </View>
           ) : (

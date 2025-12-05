@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
@@ -20,6 +22,8 @@ import {
   checkPhaseAdvancement,
   getRatioColor,
   getRatioStatus,
+  saveDailyMetric,
+  calculateDrBozRatio,
 } from '../utils/storage';
 
 const screenWidth = Dimensions.get('window').width;
@@ -30,6 +34,10 @@ export default function HomeScreen({ navigation }) {
   const [todayMetric, setTodayMetric] = useState(null);
   const [allMetrics, setAllMetrics] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [logFormExpanded, setLogFormExpanded] = useState(false);
+  const [glucose, setGlucose] = useState('');
+  const [ketones, setKetones] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
     try {
@@ -58,6 +66,56 @@ export default function HomeScreen({ navigation }) {
     await loadData();
     setRefreshing(false);
   };
+
+  const handleLogSave = async () => {
+    const g = parseFloat(glucose);
+    const k = parseFloat(ketones);
+
+    if (isNaN(g) || isNaN(k)) {
+      Alert.alert('Error', 'Please enter valid glucose and ketone values');
+      return;
+    }
+
+    if (g <= 0 || k <= 0) {
+      Alert.alert('Error', 'Values must be greater than zero');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const metric = {
+        date: format(new Date(), 'yyyy-MM-dd'),
+        glucose: g,
+        ketones: k,
+        drBozRatio: calculateDrBozRatio(g, k),
+      };
+
+      await saveDailyMetric(metric);
+      setGlucose('');
+      setKetones('');
+      setLogFormExpanded(false);
+      await loadData();
+      Alert.alert('Success!', `Metrics saved. Dr. Boz Ratio: ${metric.drBozRatio}`);
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to save metrics. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const validateNumber = (text, setter, max = null) => {
+    if (text === '' || /^\d*\.?\d*$/.test(text)) {
+      if (max && parseFloat(text) > max) {
+        return;
+      }
+      setter(text);
+    }
+  };
+
+  const calculatedRatio = glucose && ketones 
+    ? calculateDrBozRatio(parseFloat(glucose), parseFloat(ketones))
+    : null;
 
   if (!profile) {
     return (
@@ -115,7 +173,7 @@ export default function HomeScreen({ navigation }) {
       }
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero Section - Phase & Today's Ratio */}
+      {/* Phase Section with Integrated Metrics */}
       <View style={[styles.heroSection, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
         <View style={[styles.phaseBadge, { backgroundColor: theme.colors.accentBackground }]}>
           <Text style={[styles.phaseBadgeText, { color: theme.colors.accent }]}>Phase {profile.currentPhase}</Text>
@@ -141,47 +199,101 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </View>
         )}
-      </View>
 
-      {/* Today's Ratio - Large Display */}
-      <View style={[styles.ratioCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-        {ratio !== null && ratio !== undefined ? (
-          <>
-            <Text style={[styles.ratioLabel, { color: theme.colors.textSecondary }]}>Today's Ratio</Text>
-            <Text
-              style={[
-                styles.ratioValue,
-                { color: getRatioColor(ratio) },
-              ]}
-            >
-              {ratio}
-            </Text>
-            <Text style={[styles.ratioStatus, { color: getRatioColor(ratio) }]}>
-              {getRatioStatus(ratio)}
-            </Text>
-            <View style={[styles.metricRow, { borderTopColor: theme.colors.border }]}>
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>Glucose</Text>
-                <Text style={[styles.metricValue, { color: theme.colors.text }]}>{todayMetric.glucose} mmol/L</Text>
-              </View>
-              <View style={[styles.metricDivider, { backgroundColor: theme.colors.border }]} />
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>Ketones</Text>
-                <Text style={[styles.metricValue, { color: theme.colors.text }]}>{todayMetric.ketones} mmol/L</Text>
-              </View>
+        {/* Today's Ratio - Inline Display */}
+        {ratio !== null && ratio !== undefined && (
+          <View style={[styles.inlineRatioContainer, { borderTopColor: theme.colors.border }]}>
+            <View style={styles.inlineRatioLeft}>
+              <Text style={[styles.inlineRatioLabel, { color: theme.colors.textSecondary }]}>Today's Ratio</Text>
+              <Text style={[styles.inlineRatioValue, { color: getRatioColor(ratio) }]}>{ratio}</Text>
+              <Text style={[styles.inlineRatioStatus, { color: getRatioColor(ratio) }]}>
+                {getRatioStatus(ratio)}
+              </Text>
             </View>
-          </>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Text style={[styles.noDataText, { color: theme.colors.textSecondary }]}>No metrics logged today</Text>
-            <TouchableOpacity
-              style={[styles.logButton, { backgroundColor: theme.colors.accent }]}
-              onPress={() => navigation.navigate('Log')}
-            >
-              <Text style={styles.logButtonText}>Log Metrics</Text>
-            </TouchableOpacity>
+            <View style={styles.inlineRatioRight}>
+              <Text style={[styles.inlineMetricLabel, { color: theme.colors.textSecondary }]}>Glucose</Text>
+              <Text style={[styles.inlineMetricValue, { color: theme.colors.text }]}>{todayMetric.glucose} mmol/L</Text>
+              <Text style={[styles.inlineMetricLabel, { color: theme.colors.textSecondary, marginTop: 8 }]}>Ketones</Text>
+              <Text style={[styles.inlineMetricValue, { color: theme.colors.text }]}>{todayMetric.ketones} mmol/L</Text>
+            </View>
           </View>
         )}
+
+        {/* Today's Focus */}
+        <View style={[styles.inlineFocusContainer, { borderTopColor: theme.colors.border }]}>
+          <Text style={[styles.inlineFocusTitle, { color: theme.colors.text }]}>Today's Focus</Text>
+          <Text style={[styles.inlineFocusText, { color: theme.colors.textSecondary }]}>{phase.requirements}</Text>
+        </View>
+
+        {/* Expandable Log Form */}
+        <View style={[styles.logFormContainer, { borderTopColor: theme.colors.border }]}>
+          {!logFormExpanded ? (
+            <TouchableOpacity
+              style={[styles.logFormButton, { backgroundColor: theme.colors.accentBackground, borderColor: theme.colors.accent }]}
+              onPress={() => setLogFormExpanded(true)}
+            >
+              <Text style={[styles.logFormButtonText, { color: theme.colors.accent }]}>
+                {ratio !== null ? 'Update Today\'s Metrics' : '+ Log Today\'s Metrics'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.logFormExpanded}>
+              <View style={styles.logFormRow}>
+                <View style={styles.logFormInputGroup}>
+                  <Text style={[styles.logFormLabel, { color: theme.colors.text }]}>Glucose (mmol/L)</Text>
+                  <TextInput
+                    style={[styles.logFormInput, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }]}
+                    value={glucose}
+                    onChangeText={(text) => validateNumber(text, setGlucose, 30)}
+                    keyboardType="decimal-pad"
+                    placeholder="4.7"
+                    placeholderTextColor={theme.colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.logFormInputGroup}>
+                  <Text style={[styles.logFormLabel, { color: theme.colors.text }]}>Ketones (mmol/L)</Text>
+                  <TextInput
+                    style={[styles.logFormInput, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }]}
+                    value={ketones}
+                    onChangeText={(text) => validateNumber(text, setKetones, 10)}
+                    keyboardType="decimal-pad"
+                    placeholder="1.2"
+                    placeholderTextColor={theme.colors.textSecondary}
+                  />
+                </View>
+              </View>
+              {calculatedRatio !== null && (
+                <View style={[styles.logFormRatioPreview, { backgroundColor: theme.colors.accentBackground }]}>
+                  <Text style={[styles.logFormRatioLabel, { color: theme.colors.textSecondary }]}>Ratio</Text>
+                  <Text style={[styles.logFormRatioValue, { color: getRatioColor(calculatedRatio) }]}>
+                    {calculatedRatio}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.logFormActions}>
+                <TouchableOpacity
+                  style={[styles.logFormCancelButton, { borderColor: theme.colors.border }]}
+                  onPress={() => {
+                    setLogFormExpanded(false);
+                    setGlucose('');
+                    setKetones('');
+                  }}
+                >
+                  <Text style={[styles.logFormCancelText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.logFormSaveButton, { backgroundColor: theme.colors.accent }]}
+                  onPress={handleLogSave}
+                  disabled={saving || !glucose || !ketones}
+                >
+                  <Text style={styles.logFormSaveText}>
+                    {saving ? 'Saving...' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Progress Chart */}
@@ -251,30 +363,6 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
-      {/* Stats Grid */}
-      {stats && (
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Average</Text>
-            <Text style={[styles.statValue, { color: getRatioColor(stats.average) }]}>
-              {stats.average}
-            </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Best</Text>
-            <Text style={[styles.statValue, { color: getRatioColor(stats.min) }]}>
-              {stats.min}
-            </Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Highest</Text>
-            <Text style={[styles.statValue, { color: getRatioColor(stats.max) }]}>
-              {stats.max}
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* Recent Entries - Compact List */}
       {allMetrics.length > 0 && (
         <View style={[styles.entriesCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
@@ -318,20 +406,6 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
-      {/* Today's Focus */}
-      <View style={[styles.focusCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.shadow }]}>
-        <Text style={[styles.focusTitle, { color: theme.colors.text }]}>Today's Focus</Text>
-        <Text style={[styles.focusText, { color: theme.colors.textSecondary }]}>{phase.requirements}</Text>
-      </View>
-
-      {/* Action Button */}
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.accent, shadowColor: theme.colors.accent }]}
-        onPress={() => navigation.navigate('Log')}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.actionButtonText}>Log Metrics</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -411,75 +485,137 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  ratioCard: {
-    margin: 20,
-    marginTop: 24,
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+  inlineRatioContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
   },
-  ratioLabel: {
+  inlineRatioLeft: {
+    flex: 1,
+  },
+  inlineRatioLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  inlineRatioValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  inlineRatioStatus: {
     fontSize: 14,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  ratioValue: {
-    fontSize: 72,
-    fontWeight: '700',
-    letterSpacing: -2,
-    marginBottom: 8,
-  },
-  ratioStatus: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 24,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  metricRow: {
-    flexDirection: 'row',
-    width: '100%',
-    paddingTop: 24,
-    borderTopWidth: 1,
-  },
-  metricItem: {
+  inlineRatioRight: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
-  metricDivider: {
-    width: 1,
-  },
-  metricLabel: {
-    fontSize: 12,
-    marginBottom: 4,
+  inlineMetricLabel: {
+    fontSize: 11,
     fontWeight: '500',
+    marginBottom: 2,
   },
-  metricValue: {
-    fontSize: 16,
+  inlineMetricValue: {
+    fontSize: 14,
     fontWeight: '600',
   },
-  noDataContainer: {
+  inlineFocusContainer: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+  },
+  inlineFocusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  inlineFocusText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  logFormContainer: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+  },
+  logFormButton: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
-    paddingVertical: 20,
   },
-  noDataText: {
+  logFormButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logFormExpanded: {
+    marginTop: 8,
+  },
+  logFormRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  logFormInputGroup: {
+    flex: 1,
+  },
+  logFormLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  logFormInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
     fontSize: 16,
-    marginBottom: 20,
   },
-  logButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+  logFormRatioPreview: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  logButtonText: {
+  logFormRatioLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  logFormRatioValue: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  logFormActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  logFormCancelButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  logFormCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logFormSaveButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logFormSaveText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   chartCard: {
@@ -601,40 +737,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     width: 50,
     textAlign: 'right',
-  },
-  focusCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 20,
-    padding: 24,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  focusTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  focusText: {
-    fontSize: 15,
-    lineHeight: 24,
-  },
-  actionButton: {
-    marginHorizontal: 20,
-    padding: 18,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.3,
   },
 });

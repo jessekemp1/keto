@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { getUserTheme, saveUserTheme } from '../utils/storage';
+import { getUserTheme, saveUserTheme, getCustomThemeColors, saveCustomThemeColors } from '../utils/storage';
 import { useAuth } from './AuthContext';
 
 const ThemeContext = createContext({});
@@ -21,20 +21,52 @@ const themes = {
       error: '#ef4444',
     },
   },
-  'Military Monochrome': {
-    name: 'Military Monochrome',
+  'Terminal Green': {
+    name: 'Terminal Green',
+    colors: {
+      background: '#0a4a0a',
+      card: '#1a3a1a',
+      text: '#00ff88',
+      textSecondary: '#00cc66',
+      accent: '#00cc66',
+      accentBackground: '#003300',
+      border: '#1a5a1a',
+      shadow: '#000',
+      success: '#00cc66',
+      warning: '#ccaa00',
+      error: '#cc4400',
+    },
+  },
+  'Terminal Gray': {
+    name: 'Terminal Gray',
     colors: {
       background: '#1a1a1a',
       card: '#2a2a2a',
-      text: '#e0e0e0',
-      textSecondary: '#a0a0a0',
-      accent: '#00ff00',
-      accentBackground: '#003300',
+      text: '#cccccc',
+      textSecondary: '#888888',
+      accent: '#888888',
+      accentBackground: '#1a1a1a',
       border: '#3a3a3a',
       shadow: '#000',
-      success: '#00cc00',
-      warning: '#ffcc00',
-      error: '#ff0000',
+      success: '#888888',
+      warning: '#aaaaaa',
+      error: '#cc6666',
+    },
+  },
+  'Naval Console': {
+    name: 'Naval Console',
+    colors: {
+      background: '#0a1a2a',
+      card: '#1a2a3a',
+      text: '#aaccff',
+      textSecondary: '#6a8aaa',
+      accent: '#4a6a8a',
+      accentBackground: '#0a1a2a',
+      border: '#2a3a4a',
+      shadow: '#000',
+      success: '#4a8a6a',
+      warning: '#8a8a4a',
+      error: '#8a4a4a',
     },
   },
   'Dark Modern Sleek': {
@@ -59,6 +91,7 @@ export function ThemeProvider({ children }) {
   const { user, initializing: authInitializing } = useAuth();
   const [themeName, setThemeName] = useState('Modern Minimal');
   const [theme, setTheme] = useState(themes['Modern Minimal']);
+  const [customTheme, setCustomTheme] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -67,9 +100,23 @@ export function ThemeProvider({ children }) {
 
       setLoading(true);
       const storedThemeName = await getUserTheme();
-      const selectedTheme = themes[storedThemeName] || themes['Modern Minimal'];
-      setThemeName(selectedTheme.name);
-      setTheme(selectedTheme);
+      
+      if (storedThemeName === 'Custom') {
+        const customColors = await getCustomThemeColors();
+        if (customColors) {
+          setThemeName('Custom');
+          setCustomTheme({ name: 'Custom', colors: customColors });
+          setTheme({ name: 'Custom', colors: customColors });
+        } else {
+          // Fallback if custom theme doesn't exist
+          setThemeName('Modern Minimal');
+          setTheme(themes['Modern Minimal']);
+        }
+      } else {
+        const selectedTheme = themes[storedThemeName] || themes['Modern Minimal'];
+        setThemeName(selectedTheme.name);
+        setTheme(selectedTheme);
+      }
       setLoading(false);
     };
     loadUserTheme();
@@ -79,17 +126,40 @@ export function ThemeProvider({ children }) {
     if (themes[newThemeName]) {
       setThemeName(newThemeName);
       setTheme(themes[newThemeName]);
+      setCustomTheme(null);
       await saveUserTheme(newThemeName);
+    } else if (newThemeName === 'Custom' && customTheme) {
+      setThemeName('Custom');
+      setTheme(customTheme);
+      await saveUserTheme('Custom');
     } else {
       console.warn(`Theme "${newThemeName}" not found.`);
     }
+  };
+
+  const updateCustomTheme = async (colors) => {
+    const customThemeObj = { name: 'Custom', colors };
+    setCustomTheme(customThemeObj);
+    setThemeName('Custom');
+    setTheme(customThemeObj);
+    await saveCustomThemeColors(colors);
+    await saveUserTheme('Custom');
+  };
+
+  const getAvailableThemes = () => {
+    const baseThemes = Object.values(themes);
+    if (customTheme) {
+      return [...baseThemes, customTheme];
+    }
+    return baseThemes;
   };
 
   const value = {
     theme,
     themeName,
     changeTheme,
-    availableThemes: Object.values(themes),
+    availableThemes: getAvailableThemes(),
+    updateCustomTheme,
     loading,
   };
 

@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # Keto Tracker - Start Script with NVM Support
-# This script ensures nvm is loaded before running npm commands
+# This script ensures nvm is loaded and dependencies are ready before starting
 # Usage: ./start.sh [npm-command] [args...]
 # Examples:
 #   ./start.sh              # Runs: npm start
 #   ./start.sh start -- --web   # Runs: npm start -- --web
 #   ./start.sh install      # Runs: npm install
+
+set -e
 
 # Get the directory of this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,10 +17,8 @@ cd "$SCRIPT_DIR"
 # Load nvm if it exists
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
     source "$HOME/.nvm/nvm.sh" 2>/dev/null || true
-    echo "✅ Loaded nvm"
 elif [ -s "$NVM_DIR/nvm.sh" ]; then
     source "$NVM_DIR/nvm.sh" 2>/dev/null || true
-    echo "✅ Loaded nvm from NVM_DIR"
 fi
 
 # Use .nvmrc if it exists and nvm is available
@@ -37,9 +37,28 @@ echo "✅ Node.js $(node --version)"
 echo "✅ npm $(npm --version)"
 echo ""
 
+# Quick dependency check (only if starting the app)
+if [ $# -eq 0 ] || [ "$1" = "start" ]; then
+    if [ ! -d "node_modules" ]; then
+        echo "⚠️  node_modules not found. Installing dependencies..."
+        npm install
+        echo ""
+    fi
+    
+    # Verify critical dependencies
+    if ! npm list react-native-gesture-handler @react-navigation/stack &>/dev/null; then
+        echo "⚠️  Missing critical dependencies. Installing..."
+        npm install react-native-gesture-handler @react-navigation/stack
+        echo ""
+    fi
+fi
+
 # Run the command passed as arguments, or default to "npm start"
 if [ $# -eq 0 ]; then
     echo "🚀 Starting Expo development server..."
+    echo "   📱 Press 'a' for Android, 'i' for iOS, 'w' for web"
+    echo "   🌐 Web will be available at: http://localhost:19006"
+    echo ""
     npm start
 else
     echo "🚀 Running: npm $@"

@@ -49,17 +49,24 @@ Minimal viable product for tracking ketogenic diet progress through Dr. Boz's 12
    npm install
    ```
 
-3. **Start Expo development server**
+3. **Verify setup** (recommended first time)
    ```bash
-   # Option 1: Use the start script (handles nvm automatically)
+   ./check-setup.sh
+   ```
+
+4. **Start Expo development server**
+   ```bash
+   # Option 1: Use the start script (RECOMMENDED - handles everything)
    ./start.sh
    
-   # Option 2: Manual start (if nvm is already loaded)
-   npm start
-   
-   # Option 3: For web specifically
+   # Option 2: For web specifically
    ./start.sh start -- --web
+   
+   # Option 3: Manual start (only if nvm is already loaded)
+   npm start
    ```
+   
+   **Important**: Web app runs on **http://localhost:19006** (not 8081)
 
 4. **Connect your Pixel 8**
    - Connect via USB cable
