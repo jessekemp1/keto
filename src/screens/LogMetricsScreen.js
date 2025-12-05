@@ -73,6 +73,7 @@ export default function LogMetricsScreen({ navigation, route }) {
   const [clarity, setClarity] = useState('');
   const [ratio, setRatio] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     // Check if a date was passed via route params (for editing past dates)
@@ -92,6 +93,7 @@ export default function LogMetricsScreen({ navigation, route }) {
       setWeight(dateData.weight?.toString() || '');
       setEnergy(dateData.energy?.toString() || '');
       setClarity(dateData.clarity?.toString() || '');
+      setIsEditing(true); // Mark as editing existing entry
     } else {
       // Clear fields if no data for selected date
       setGlucose('');
@@ -99,6 +101,7 @@ export default function LogMetricsScreen({ navigation, route }) {
       setWeight('');
       setEnergy('');
       setClarity('');
+      setIsEditing(false); // Mark as new entry
     }
   };
 
@@ -160,9 +163,10 @@ export default function LogMetricsScreen({ navigation, route }) {
         ? 'today' 
         : format(parseISO(selectedDate), 'MMMM d, yyyy');
 
+      const actionText = isEditing ? 'updated' : 'saved';
       Alert.alert(
         'Success!',
-        `Metrics saved for ${dateDisplay}\nDr. Boz Ratio: ${metric.drBozRatio}\n\nData is stored locally in this browser.`,
+        `Metrics ${actionText} for ${dateDisplay}\nDr. Boz Ratio: ${metric.drBozRatio}`,
         [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
       );
     } catch (error) {
@@ -192,7 +196,9 @@ export default function LogMetricsScreen({ navigation, route }) {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Log Metrics</Text>
+        <Text style={styles.title}>
+          {isEditing ? 'Edit Entry' : 'Log Metrics'}
+        </Text>
         <View style={styles.dateSection}>
           <Text style={styles.dateLabel}>Date:</Text>
           {Platform.OS === 'web' ? (
@@ -377,7 +383,9 @@ export default function LogMetricsScreen({ navigation, route }) {
           disabled={saving}
         >
           <Text style={styles.saveButtonText}>
-            {saving ? 'Saving...' : 'Save Metrics'}
+            {saving 
+              ? (isEditing ? 'Updating...' : 'Saving...') 
+              : (isEditing ? 'Update Entry' : 'Save Metrics')}
           </Text>
         </TouchableOpacity>
       </View>

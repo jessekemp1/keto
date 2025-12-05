@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   USER_PROFILE: 'user_profile',
   DAILY_METRICS: 'daily_metrics',
   USE_CLOUD_SYNC: 'use_cloud_sync',
+  HAS_MIGRATED_TO_CLOUD: 'has_migrated_to_cloud',
 };
 
 /**
@@ -41,32 +42,89 @@ export const setCloudSync = async (enabled) => {
 };
 
 /**
+ * Trigger migration manually (useful for testing or manual sync)
+ */
+export const triggerDataMigration = async () => {
+  return await migrateLocalDataToCloud();
+};
+
+/**
+ * Check if data has already been migrated to cloud for current user
+ */
+const hasMigratedToCloud = async () => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return false;
+    
+    const migrationKey = `${STORAGE_KEYS.HAS_MIGRATED_TO_CLOUD}_${user.uid}`;
+    const migrated = await AsyncStorage.getItem(migrationKey);
+    return migrated === 'true';
+  } catch (error) {
+    console.error('Error checking migration status:', error);
+    return false;
+  }
+};
+
+/**
+ * Mark data as migrated for current user
+ */
+const setMigratedToCloud = async () => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return;
+    
+    const migrationKey = `${STORAGE_KEYS.HAS_MIGRATED_TO_CLOUD}_${user.uid}`;
+    await AsyncStorage.setItem(migrationKey, 'true');
+  } catch (error) {
+    console.error('Error setting migration status:', error);
+  }
+};
+
+/**
  * Migrate local data to Firebase
  */
 const migrateLocalDataToCloud = async () => {
   try {
     const user = getCurrentUser();
-    if (!user) return;
+    if (!user) {
+      console.log('No user signed in, skipping migration');
+      return;
+    }
+
+    // Check if already migrated
+    if (await hasMigratedToCloud()) {
+      console.log('Data already migrated to cloud for this user');
+      return;
+    }
+
+    console.log('Starting migration of local data to cloud...');
 
     // Migrate profile
     const localProfile = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
     if (localProfile) {
       const profile = JSON.parse(localProfile);
       await FirestoreService.saveUserProfile(user.uid, profile);
+      console.log('✅ Profile migrated to cloud');
     }
 
     // Migrate metrics
     const localMetrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
     if (localMetrics) {
       const metrics = JSON.parse(localMetrics);
+      let migratedCount = 0;
       for (const metric of metrics) {
         await FirestoreService.saveDailyMetric(user.uid, metric);
+        migratedCount++;
       }
+      console.log(`✅ Migrated ${migratedCount} metrics to cloud`);
     }
 
-    console.log('Successfully migrated local data to cloud');
+    // Mark as migrated
+    await setMigratedToCloud();
+    console.log('✅ Migration complete - local data synced to cloud');
   } catch (error) {
-    console.error('Error migrating data to cloud:', error);
+    console.error('❌ Error migrating data to cloud:', error);
+    // Don't throw - migration failure shouldn't block app usage
   }
 };
 
@@ -197,21 +255,52 @@ export const getDailyMetrics = async () => {
     // Check if should use cloud storage
     if (await shouldUseCloud()) {
       const user = getCurrentUser();
+      
+      // Try to load from cloud first
       const result = await FirestoreService.getAllMetrics(user.uid);
 
-      if (result.success && result.metrics) {
-        // Cache to local storage
+      if (result.success && result.metrics && result.metrics.length > 0) {
+        // Cloud has data - cache to local and return
         await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(result.metrics));
         return result.metrics;
       }
+
+      // Cloud is empty - check if we need to migrate local data
+      if (!(await hasMigratedToCloud())) {
+        const localMetrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
+        if (localMetrics) {
+          const localData = JSON.parse(localMetrics);
+          if (localData.length > 0) {
+            // Local data exists but cloud is empty - migrate it
+            console.log('🔄 Cloud is empty but local data exists - migrating...');
+            await migrateLocalDataToCloud();
+            // After migration, reload from cloud
+            const migratedResult = await FirestoreService.getAllMetrics(user.uid);
+            if (migratedResult.success && migratedResult.metrics) {
+              await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(migratedResult.metrics));
+              return migratedResult.metrics;
+            }
+          }
+        }
+      }
+
+      // Cloud is empty and no local data (or already migrated) - return empty
+      return [];
     }
 
-    // Fallback to local storage
+    // Not using cloud - fallback to local storage
     const metrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
     return metrics ? JSON.parse(metrics) : [];
   } catch (error) {
     console.error('Error loading metrics:', error);
-    return [];
+    // Fallback to local on error
+    try {
+      const metrics = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_METRICS);
+      return metrics ? JSON.parse(metrics) : [];
+    } catch (fallbackError) {
+      console.error('Error loading from local fallback:', fallbackError);
+      return [];
+    }
   }
 };
 
@@ -233,30 +322,49 @@ export const saveDailyMetric = async (metric) => {
     // Sort by date descending
     newMetrics.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // Save to local storage with error handling
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
-      console.log('✅ Metric saved to local storage:', date);
-    } catch (storageError) {
-      console.error('❌ Failed to save to local storage:', storageError);
-      // Check if it's a quota error
-      if (storageError.message && storageError.message.includes('quota')) {
-        throw new Error('Storage quota exceeded. Please clear some browser data or sign in for cloud sync.');
-      }
-      throw storageError;
-    }
-
-    // Also save to cloud if enabled
+    // Save to cloud first if enabled (cloud is source of truth)
     if (await shouldUseCloud()) {
       try {
         const user = getCurrentUser();
         await FirestoreService.saveDailyMetric(user.uid, metricWithDate);
         console.log('✅ Metric saved to cloud:', date);
+        
+        // Then cache to local storage for offline access
+        try {
+          await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
+          console.log('✅ Metric cached to local storage:', date);
+        } catch (cacheError) {
+          console.warn('⚠️ Failed to cache to local (cloud save succeeded):', cacheError);
+          // Don't throw - cloud save succeeded, local cache is optional
+        }
       } catch (cloudError) {
-        console.warn('⚠️ Failed to save to cloud (local save succeeded):', cloudError);
-        // Don't throw - local save succeeded, cloud is optional
+        console.warn('⚠️ Failed to save to cloud, falling back to local:', cloudError);
+        // Fallback to local storage if cloud fails
+        try {
+          await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
+          console.log('✅ Metric saved to local storage (cloud unavailable):', date);
+        } catch (storageError) {
+          console.error('❌ Failed to save to local storage:', storageError);
+          // Check if it's a quota error
+          if (storageError.message && storageError.message.includes('quota')) {
+            throw new Error('Storage quota exceeded. Please clear some browser data or sign in for cloud sync.');
+          }
+          throw storageError;
+        }
       }
     } else {
+      // Not using cloud - save to local storage only
+      try {
+        await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
+        console.log('✅ Metric saved to local storage:', date);
+      } catch (storageError) {
+        console.error('❌ Failed to save to local storage:', storageError);
+        // Check if it's a quota error
+        if (storageError.message && storageError.message.includes('quota')) {
+          throw new Error('Storage quota exceeded. Please clear some browser data or sign in for cloud sync.');
+        }
+        throw storageError;
+      }
       console.log('ℹ️ Cloud sync not enabled - data saved locally only');
     }
 
@@ -339,6 +447,81 @@ export const getRatioStatus = (ratio) => {
   if (ratio < 80) return 'Good';
   if (ratio < 100) return 'Fair';
   return 'Needs work';
+};
+
+/**
+ * Export all metrics to CSV format
+ */
+export const exportMetricsToCSV = async () => {
+  try {
+    const metrics = await getDailyMetrics();
+    const profile = await getUserProfile();
+
+    if (metrics.length === 0) {
+      return {
+        success: false,
+        error: 'No data to export',
+      };
+    }
+
+    // Sort by date ascending
+    const sortedMetrics = [...metrics].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Create CSV header
+    const headers = [
+      'Date',
+      'Glucose (mmol/L)',
+      'Ketones (mmol/L)',
+      'Dr. Boz Ratio',
+      'Status',
+      'Weight (kg)',
+      'Energy (1-10)',
+      'Clarity (1-10)',
+      'Phase',
+    ];
+
+    // Create CSV rows
+    const rows = sortedMetrics.map((metric) => {
+      const date = format(parseISO(metric.date), 'yyyy-MM-dd');
+      const status = getRatioStatus(metric.drBozRatio);
+      const phase = profile?.currentPhase || 'N/A';
+      
+      return [
+        date,
+        metric.glucose?.toString() || '',
+        metric.ketones?.toString() || '',
+        metric.drBozRatio?.toString() || '',
+        status,
+        metric.weight?.toString() || '',
+        metric.energy?.toString() || '',
+        metric.clarity?.toString() || '',
+        phase.toString(),
+      ];
+    });
+
+    // Combine header and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    // Add BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+
+    return {
+      success: true,
+      csv: csvWithBOM,
+      filename: `keto-tracker-export-${format(new Date(), 'yyyy-MM-dd')}.csv`,
+      recordCount: metrics.length,
+    };
+  } catch (error) {
+    console.error('Error exporting to CSV:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to export data',
+    };
+  }
 };
 
 /**

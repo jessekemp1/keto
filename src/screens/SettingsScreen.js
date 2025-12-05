@@ -10,13 +10,14 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import AuthScreen from './AuthScreen';
-import { generateSampleData } from '../utils/storage';
+import { generateSampleData, exportMetricsToCSV } from '../utils/storage';
 
 export default function SettingsScreen() {
   const { user, signOut: contextSignOut, loading: authLoading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [generatingData, setGeneratingData] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const handleSignOut = async () => {
     // For web, use window.confirm instead of Alert.alert which may not work
@@ -75,6 +76,48 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const result = await exportMetricsToCSV();
+      setExporting(false);
+
+      if (result.success) {
+        // For web, trigger download
+        if (typeof window !== 'undefined' && window.document) {
+          const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', result.filename);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          Alert.alert(
+            'Export Successful!',
+            `Exported ${result.recordCount} records to ${result.filename}`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          // For native, show the CSV content (user can copy)
+          Alert.alert(
+            'Export Ready',
+            `Exported ${result.recordCount} records. CSV content copied to clipboard.`,
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        Alert.alert('Export Failed', result.error || 'Failed to export data');
+      }
+    } catch (error) {
+      setExporting(false);
+      console.error('Export error:', error);
+      Alert.alert('Export Failed', error.message || 'An error occurred while exporting data');
+    }
   };
 
   if (showAuth) {
@@ -159,6 +202,27 @@ export default function SettingsScreen() {
             </Text>
             <Text style={styles.appVersion}>Version 1.0.0</Text>
           </View>
+        </View>
+
+        {/* Data Management */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data Management</Text>
+          <TouchableOpacity
+            style={[styles.button, styles.exportButton, exporting && styles.buttonDisabled]}
+            onPress={handleExportData}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <ActivityIndicator color="#2563eb" />
+            ) : (
+              <>
+                <Text style={styles.exportButtonText}>📥 Export Data to CSV</Text>
+                <Text style={styles.exportButtonSubtext}>
+                  Download all your metrics for analysis or backup
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Data Storage Info */}
@@ -298,6 +362,23 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  exportButton: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    marginBottom: 12,
+  },
+  exportButtonText: {
+    color: '#2563eb',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  exportButtonSubtext: {
+    color: '#6b7280',
+    fontSize: 12,
+    textAlign: 'center',
   },
   signOutButton: {
     backgroundColor: '#ffffff',

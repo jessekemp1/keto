@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import LogMetricsScreen from './src/screens/LogMetricsScreen';
-import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import PhaseInfoScreen from './src/screens/PhaseInfoScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
@@ -44,39 +43,52 @@ function AppContent() {
       <Tab.Navigator
         screenOptions={{
           tabBarActiveTintColor: '#2563eb',
-          tabBarInactiveTintColor: '#6b7280',
+          tabBarInactiveTintColor: '#9ca3af',
+          tabBarStyle: {
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#f3f4f6',
+            paddingTop: 8,
+            paddingBottom: 8,
+            height: 60,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+          },
           headerStyle: {
-            backgroundColor: '#f9fafb',
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 1,
+            borderBottomColor: '#f3f4f6',
+            elevation: 0,
+            shadowOpacity: 0,
           },
           headerTitleStyle: {
-            fontWeight: 'bold',
+            fontWeight: '700',
+            fontSize: 18,
+            color: '#111827',
           },
         }}
       >
         <Tab.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'Keto Continuum' }}
+          options={{ title: 'Continuum' }}
         />
         <Tab.Screen
           name="Log"
           component={LogMetricsScreen}
-          options={{ title: 'Log Metrics' }}
-        />
-        <Tab.Screen
-          name="Analytics"
-          component={AnalyticsScreen}
-          options={{ title: 'Progress' }}
+          options={{ title: 'Log' }}
         />
         <Tab.Screen
           name="Phase"
           component={PhaseInfoScreen}
-          options={{ title: 'Current Phase' }}
+          options={{ title: 'Phase' }}
         />
         <Tab.Screen
           name="Settings"
           component={SettingsScreen}
-          options={{ title: 'Account & Settings' }}
+          options={{ title: 'Settings' }}
         />
       </Tab.Navigator>
     </NavigationContainer>
