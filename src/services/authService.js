@@ -4,8 +4,10 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, isFirebaseReady } from '../config/firebase';
 
 /**
  * Sign up a new user with email and password
@@ -35,6 +37,13 @@ export const signUp = async (email, password, displayName) => {
  * Sign in existing user with email and password
  */
 export const signIn = async (email, password) => {
+  if (!isFirebaseReady() || !auth) {
+    return {
+      success: false,
+      error: 'Firebase is not configured. Please set up your .env file with Firebase credentials.',
+    };
+  }
+
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return {
@@ -50,13 +59,45 @@ export const signIn = async (email, password) => {
 };
 
 /**
+ * Sign in with Google
+ */
+export const signInWithGoogle = async () => {
+  if (!isFirebaseReady() || !auth) {
+    return {
+      success: false,
+      error: 'Firebase is not configured. Please set up your .env file with Firebase credentials.',
+    };
+  }
+
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return {
+      success: true,
+      user: result.user,
+    };
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    return {
+      success: false,
+      error: getErrorMessage(error.code) || 'Google sign-in failed. Please try again.',
+    };
+  }
+};
+
+/**
  * Sign out current user
  */
 export const signOut = async () => {
+  if (!isFirebaseReady() || !auth) {
+    return { success: false, error: 'Firebase is not configured.' };
+  }
+
   try {
     await firebaseSignOut(auth);
     return { success: true };
   } catch (error) {
+    console.error('Sign out error:', error);
     return {
       success: false,
       error: 'Failed to sign out. Please try again.',
@@ -68,6 +109,10 @@ export const signOut = async () => {
  * Listen to authentication state changes
  */
 export const onAuthChange = (callback) => {
+  if (!isFirebaseReady() || !auth) {
+    // Return a function that does nothing if Firebase isn't ready
+    return () => {};
+  }
   return onAuthStateChanged(auth, callback);
 };
 
@@ -75,6 +120,9 @@ export const onAuthChange = (callback) => {
  * Get current user
  */
 export const getCurrentUser = () => {
+  if (!isFirebaseReady() || !auth) {
+    return null;
+  }
   return auth.currentUser;
 };
 
@@ -99,6 +147,12 @@ const getErrorMessage = (errorCode) => {
       return 'Incorrect password.';
     case 'auth/too-many-requests':
       return 'Too many failed attempts. Please try again later.';
+    case 'auth/popup-closed-by-user':
+      return 'Sign-in popup was closed. Please try again.';
+    case 'auth/popup-blocked':
+      return 'Popup was blocked by your browser. Please allow popups and try again.';
+    case 'auth/cancelled-popup-request':
+      return 'Only one popup request is allowed at a time. Please try again.';
     default:
       return 'Authentication failed. Please try again.';
   }

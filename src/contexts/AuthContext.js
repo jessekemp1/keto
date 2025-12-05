@@ -35,13 +35,20 @@ export function AuthProvider({ children }) {
   const signOut = async () => {
     try {
       setLoading(true);
-      await authSignOut();
-      await setCloudSync(false);
-      setUser(null);
+      const result = await authSignOut();
+      if (result.success) {
+        await setCloudSync(false);
+        setUser(null);
+      } else {
+        console.error('Sign out failed:', result.error);
+        throw new Error(result.error || 'Failed to sign out');
+      }
       setLoading(false);
+      return result;
     } catch (error) {
       console.error('Error signing out:', error);
       setLoading(false);
+      return { success: false, error: error.message || 'Failed to sign out' };
     }
   };
 

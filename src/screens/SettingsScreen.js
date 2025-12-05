@@ -10,23 +10,67 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import AuthScreen from './AuthScreen';
+import { generateSampleData } from '../utils/storage';
 
 export default function SettingsScreen() {
-  const { user, signOut, loading } = useAuth();
+  const { user, signOut: contextSignOut, loading: authLoading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+  const [generatingData, setGeneratingData] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    // For web, use window.confirm instead of Alert.alert which may not work
+    const confirmed = window.confirm(
+      'Are you sure you want to sign out? Your data will remain on this device but won\'t sync to the cloud.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSigningOut(true);
+      const result = await contextSignOut();
+      setSigningOut(false);
+
+      if (result && result.success) {
+        // Show success message
+        window.alert('You have been signed out successfully.');
+        // The AuthContext will update the UI automatically via onAuthChange
+      } else {
+        const errorMsg = result?.error || 'Failed to sign out. Please try again.';
+        console.error('Sign out failed:', errorMsg);
+        window.alert(`Error: ${errorMsg}`);
+      }
+    } catch (error) {
+      setSigningOut(false);
+      console.error('Sign out error:', error);
+      window.alert('Failed to sign out. Please try again.');
+    }
+  };
+
+  const handleGenerateSampleData = () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out? Your data will remain on this device but won\'t sync to the cloud.',
+      'Generate Sample Data',
+      'This will create 14 days of sample historical data showing progress over time. Existing data will be preserved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sign Out',
-          style: 'destructive',
+          text: 'Generate',
           onPress: async () => {
-            await signOut();
-            Alert.alert('Signed Out', 'You have been signed out successfully.');
+            setGeneratingData(true);
+            const result = await generateSampleData();
+            setGeneratingData(false);
+            
+            if (result.success) {
+              Alert.alert(
+                'Success!',
+                result.message,
+                [{ text: 'OK' }]
+              );
+            } else {
+              Alert.alert('Error', result.message);
+            }
           },
         },
       ]
@@ -75,11 +119,11 @@ export default function SettingsScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.button, styles.signOutButton, loading && styles.buttonDisabled]}
+                style={[styles.button, styles.signOutButton, (authLoading || signingOut) && styles.buttonDisabled]}
                 onPress={handleSignOut}
-                disabled={loading}
+                disabled={authLoading || signingOut}
               >
-                {loading ? (
+                {(authLoading || signingOut) ? (
                   <ActivityIndicator color="#ef4444" />
                 ) : (
                   <Text style={styles.signOutButtonText}>Sign Out</Text>
@@ -137,6 +181,25 @@ export default function SettingsScreen() {
               </>
             )}
           </View>
+        </View>
+
+        {/* Development Tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Development</Text>
+          <TouchableOpacity
+            style={[styles.button, styles.devButton, generatingData && styles.buttonDisabled]}
+            onPress={handleGenerateSampleData}
+            disabled={generatingData}
+          >
+            {generatingData ? (
+              <ActivityIndicator color="#2563eb" />
+            ) : (
+              <Text style={styles.devButtonText}>Generate Sample Historical Data</Text>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.devHelpText}>
+            Creates 14 days of sample data showing realistic progress from higher to lower Dr. Boz Ratios.
+          </Text>
         </View>
       </View>
     </ScrollView>
@@ -279,5 +342,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1e40af',
     lineHeight: 20,
+  },
+  devButton: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    marginBottom: 8,
+  },
+  devButtonText: {
+    color: '#2563eb',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  devHelpText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    paddingHorizontal: 4,
   },
 });

@@ -7,15 +7,40 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   saveDailyMetric,
   getTodayMetric,
+  getDailyMetrics,
   calculateDrBozRatio,
   getRatioColor,
   getRatioStatus,
 } from '../utils/storage';
+
+// Web date input component
+const WebDateInput = ({ value, max, onChange, style }) => {
+  if (Platform.OS !== 'web') return null;
+  
+  return React.createElement('input', {
+    type: 'date',
+    value: value,
+    max: max,
+    onChange: (e) => onChange(e.target.value),
+    style: {
+      flex: 1,
+      padding: '8px',
+      fontSize: '16px',
+      border: '1px solid #bfdbfe',
+      borderRadius: '6px',
+      backgroundColor: '#ffffff',
+      color: '#1e40af',
+      fontFamily: 'inherit',
+      ...style,
+    },
+  });
+};
 
 // Expandable help tip component
 function HelpTip({ title, children }) {
@@ -39,7 +64,8 @@ function HelpTip({ title, children }) {
   );
 }
 
-export default function LogMetricsScreen({ navigation }) {
+export default function LogMetricsScreen({ navigation, route }) {
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [glucose, setGlucose] = useState('');
   const [ketones, setKetones] = useState('');
   const [weight, setWeight] = useState('');
@@ -49,17 +75,30 @@ export default function LogMetricsScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadTodayData();
-  }, []);
+    // Check if a date was passed via route params (for editing past dates)
+    const dateParam = route?.params?.date;
+    if (dateParam) {
+      setSelectedDate(dateParam);
+    }
+    loadDateData();
+  }, [selectedDate, route?.params?.date]);
 
-  const loadTodayData = async () => {
-    const todayData = await getTodayMetric();
-    if (todayData) {
-      setGlucose(todayData.glucose?.toString() || '');
-      setKetones(todayData.ketones?.toString() || '');
-      setWeight(todayData.weight?.toString() || '');
-      setEnergy(todayData.energy?.toString() || '');
-      setClarity(todayData.clarity?.toString() || '');
+  const loadDateData = async () => {
+    const allMetrics = await getDailyMetrics();
+    const dateData = allMetrics.find(m => m.date === selectedDate);
+    if (dateData) {
+      setGlucose(dateData.glucose?.toString() || '');
+      setKetones(dateData.ketones?.toString() || '');
+      setWeight(dateData.weight?.toString() || '');
+      setEnergy(dateData.energy?.toString() || '');
+      setClarity(dateData.clarity?.toString() || '');
+    } else {
+      // Clear fields if no data for selected date
+      setGlucose('');
+      setKetones('');
+      setWeight('');
+      setEnergy('');
+      setClarity('');
     }
   };
 
@@ -87,11 +126,20 @@ export default function LogMetricsScreen({ navigation }) {
       return;
     }
 
+    // Validate date is not in the future
+    const selectedDateObj = parseISO(selectedDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDateObj > today) {
+      Alert.alert('Error', 'Cannot log metrics for future dates');
+      return;
+    }
+
     setSaving(true);
 
     try {
       const metric = {
-        date: format(new Date(), 'yyyy-MM-dd'),
+        date: selectedDate,
         glucose: g,
         ketones: k,
         drBozRatio: calculateDrBozRatio(g, k),
@@ -100,15 +148,27 @@ export default function LogMetricsScreen({ navigation }) {
         clarity: clarity ? parseInt(clarity) : null,
       };
 
-      await saveDailyMetric(metric);
+      const savedMetrics = await saveDailyMetric(metric);
+      
+      // Verify save succeeded
+      if (!savedMetrics || savedMetrics.length === 0) {
+        throw new Error('Save verification failed');
+      }
+
+      const isToday = selectedDate === format(new Date(), 'yyyy-MM-dd');
+      const dateDisplay = isToday 
+        ? 'today' 
+        : format(parseISO(selectedDate), 'MMMM d, yyyy');
 
       Alert.alert(
         'Success!',
-        `Metrics saved\nDr. Boz Ratio: ${metric.drBozRatio}`,
+        `Metrics saved for ${dateDisplay}\nDr. Boz Ratio: ${metric.drBozRatio}\n\nData is stored locally in this browser.`,
         [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to save metrics. Please try again.');
+      console.error('Save error:', error);
+      const errorMessage = error.message || 'Failed to save metrics. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -124,11 +184,42 @@ export default function LogMetricsScreen({ navigation }) {
     }
   };
 
+  const isToday = selectedDate === format(new Date(), 'yyyy-MM-dd');
+  const dateDisplay = isToday 
+    ? format(new Date(), 'MMMM d, yyyy')
+    : format(parseISO(selectedDate), 'MMMM d, yyyy');
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Log Today's Metrics</Text>
-        <Text style={styles.subtitle}>{format(new Date(), 'MMMM d, yyyy')}</Text>
+        <Text style={styles.title}>Log Metrics</Text>
+        <View style={styles.dateSection}>
+          <Text style={styles.dateLabel}>Date:</Text>
+          {Platform.OS === 'web' ? (
+            <View style={styles.dateInputContainer}>
+              <WebDateInput
+                value={selectedDate}
+                max={format(new Date(), 'yyyy-MM-dd')}
+                onChange={setSelectedDate}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => {
+                // For native, you could open a date picker here
+                // For now, show an alert with instructions
+                Alert.alert(
+                  'Select Date',
+                  'Date picker coming soon. For now, you can edit past dates by tapping on entries in the Progress screen.',
+                  [{ text: 'OK' }]
+                );
+              }}
+            >
+              <Text style={styles.dateButtonText}>{dateDisplay}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Required Metrics */}
         <View style={styles.section}>
@@ -312,6 +403,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginBottom: 24,
+  },
+  dateSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  dateLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e40af',
+    marginRight: 12,
+  },
+  dateInputContainer: {
+    flex: 1,
+  },
+  dateButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#1e40af',
+    fontWeight: '600',
   },
   section: {
     marginBottom: 24,

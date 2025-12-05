@@ -233,17 +233,36 @@ export const saveDailyMetric = async (metric) => {
     // Sort by date descending
     newMetrics.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
+    // Save to local storage with error handling
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(newMetrics));
+      console.log('✅ Metric saved to local storage:', date);
+    } catch (storageError) {
+      console.error('❌ Failed to save to local storage:', storageError);
+      // Check if it's a quota error
+      if (storageError.message && storageError.message.includes('quota')) {
+        throw new Error('Storage quota exceeded. Please clear some browser data or sign in for cloud sync.');
+      }
+      throw storageError;
+    }
 
     // Also save to cloud if enabled
     if (await shouldUseCloud()) {
-      const user = getCurrentUser();
-      await FirestoreService.saveDailyMetric(user.uid, metricWithDate);
+      try {
+        const user = getCurrentUser();
+        await FirestoreService.saveDailyMetric(user.uid, metricWithDate);
+        console.log('✅ Metric saved to cloud:', date);
+      } catch (cloudError) {
+        console.warn('⚠️ Failed to save to cloud (local save succeeded):', cloudError);
+        // Don't throw - local save succeeded, cloud is optional
+      }
+    } else {
+      console.log('ℹ️ Cloud sync not enabled - data saved locally only');
     }
 
     return newMetrics;
   } catch (error) {
-    console.error('Error saving metric:', error);
+    console.error('❌ Error saving metric:', error);
     throw error;
   }
 };
@@ -320,4 +339,101 @@ export const getRatioStatus = (ratio) => {
   if (ratio < 80) return 'Good';
   if (ratio < 100) return 'Fair';
   return 'Needs work';
+};
+
+/**
+ * Generate sample historical data for the past 14 days
+ * Shows realistic progression from higher ratios to lower (better) ratios
+ */
+export const generateSampleData = async () => {
+  try {
+    const existingMetrics = await getDailyMetrics();
+    
+    // Don't overwrite if there's already substantial data
+    if (existingMetrics.length >= 10) {
+      return { success: false, message: 'You already have enough data. Clear existing data first if you want to regenerate.' };
+    }
+
+    const sampleMetrics = [];
+    const today = new Date();
+    
+    // Generate 14 days of sample data showing improvement over time
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      
+      // Skip today if it already has data
+      if (i === 0 && existingMetrics.some(m => m.date === dateStr)) {
+        continue;
+      }
+      
+      // Progressive improvement: start higher (worse), end lower (better)
+      // Day 0-3: High ratios (100-120) - not in ketosis yet
+      // Day 4-7: Medium ratios (70-90) - entering ketosis
+      // Day 8-11: Good ratios (50-70) - therapeutic ketosis
+      // Day 12-13: Excellent ratios (30-50) - deep ketosis
+      
+      let targetRatio;
+      if (i >= 10) {
+        targetRatio = 100 + Math.random() * 20; // 100-120
+      } else if (i >= 6) {
+        targetRatio = 70 + Math.random() * 20; // 70-90
+      } else if (i >= 2) {
+        targetRatio = 50 + Math.random() * 20; // 50-70
+      } else {
+        targetRatio = 30 + Math.random() * 20; // 30-50
+      }
+      
+      // Generate realistic glucose and ketone values that produce the target ratio
+      // Typical glucose: 4.0-5.5 mmol/L for keto
+      // Typical ketones: 0.5-3.0 mmol/L for therapeutic ketosis
+      const glucose = 4.0 + Math.random() * 1.5; // 4.0-5.5
+      const ketones = glucose / targetRatio;
+      
+      // Ensure ketones are in realistic range (0.3-3.5)
+      let finalKetones = ketones;
+      if (ketones < 0.3) {
+        finalKetones = 0.3 + Math.random() * 0.2;
+      } else if (ketones > 3.5) {
+        finalKetones = 2.5 + Math.random() * 1.0;
+      }
+      
+      const finalRatio = calculateDrBozRatio(glucose, finalKetones);
+      
+      sampleMetrics.push({
+        date: dateStr,
+        glucose: Math.round(glucose * 10) / 10,
+        ketones: Math.round(finalKetones * 10) / 10,
+        drBozRatio: finalRatio,
+        weight: i % 3 === 0 ? Math.round((180 - i * 0.2) * 10) / 10 : null, // Occasional weight entries
+        energy: i % 2 === 0 ? Math.floor(5 + (13 - i) * 0.3) : null, // Improving energy
+        clarity: i % 2 === 0 ? Math.floor(6 + (13 - i) * 0.25) : null, // Improving clarity
+      });
+    }
+    
+    // Merge with existing metrics (don't overwrite existing dates)
+    const existingDates = new Set(existingMetrics.map(m => m.date));
+    const newMetrics = sampleMetrics.filter(m => !existingDates.has(m.date));
+    const allMetrics = [...existingMetrics, ...newMetrics];
+    
+    // Sort by date descending
+    allMetrics.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Save to storage
+    await AsyncStorage.setItem(STORAGE_KEYS.DAILY_METRICS, JSON.stringify(allMetrics));
+    
+    // Also save to cloud if enabled
+    if (await shouldUseCloud()) {
+      const user = getCurrentUser();
+      for (const metric of newMetrics) {
+        await FirestoreService.saveDailyMetric(user.uid, metric);
+      }
+    }
+    
+    return { success: true, message: `Generated ${newMetrics.length} days of sample data!`, count: newMetrics.length };
+  } catch (error) {
+    console.error('Error generating sample data:', error);
+    return { success: false, message: 'Failed to generate sample data. Please try again.' };
+  }
 };

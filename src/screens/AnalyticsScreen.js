@@ -6,6 +6,7 @@ import {
   ScrollView,
   Dimensions,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
@@ -14,7 +15,7 @@ import { getRecentMetrics, getDailyMetrics, getRatioColor } from '../utils/stora
 
 const screenWidth = Dimensions.get('window').width;
 
-export default function AnalyticsScreen() {
+export default function AnalyticsScreen({ navigation }) {
   const [metrics, setMetrics] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -69,6 +70,8 @@ export default function AnalyticsScreen() {
           strokeWidth: 3,
         },
       ],
+      ratios, // Store ratios for color calculation
+      recentMetrics, // Store full metrics for color calculation
     };
   };
 
@@ -122,10 +125,18 @@ export default function AnalyticsScreen() {
                   style: {
                     borderRadius: 16,
                   },
-                  propsForDots: {
-                    r: '6',
-                    strokeWidth: '2',
-                    stroke: '#2563eb',
+                  propsForDots: (dataPoint, index) => {
+                    // Get the ratio for this data point
+                    const ratio = chartData.ratios && chartData.ratios[index];
+                    const color = ratio !== null && ratio !== undefined 
+                      ? getRatioColor(ratio) 
+                      : '#6b7280';
+                    return {
+                      r: '6',
+                      strokeWidth: '2',
+                      stroke: color,
+                      fill: color,
+                    };
                   },
                 }}
                 bezier
@@ -205,7 +216,14 @@ export default function AnalyticsScreen() {
                 .slice()
                 .sort((a, b) => new Date(b.date) - new Date(a.date))
                 .map((metric, index) => (
-                  <View key={index} style={styles.dataRow}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.dataRow}
+                    onPress={() => {
+                      navigation.navigate('Log', { date: metric.date });
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.dataDate}>
                       {format(parseISO(metric.date), 'MMM d')}
                     </Text>
@@ -222,7 +240,7 @@ export default function AnalyticsScreen() {
                     >
                       {metric.drBozRatio}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
             </View>
           </>

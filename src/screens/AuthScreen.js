@@ -9,11 +9,12 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { signIn, signUp } from '../services/authService';
+import { signIn, signUp, signInWithGoogle } from '../services/authService';
 import { setCloudSync } from '../utils/storage';
 
 export default function AuthScreen({ onAuthSuccess }) {
-  const [isSignUp, setIsSignUp] = useState(false);
+  // Default to sign-up mode for new users
+  const [isSignUp, setIsSignUp] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,20 +49,33 @@ export default function AuthScreen({ onAuthSuccess }) {
     if (!validateInputs()) return;
 
     setLoading(true);
-    const result = await signIn(email, password);
-    setLoading(false);
+    try {
+      const result = await signIn(email, password);
+      setLoading(false);
 
-    if (result.success) {
-      // Enable cloud sync
-      await setCloudSync(true);
+      if (result.success) {
+        // Enable cloud sync
+        await setCloudSync(true);
 
-      Alert.alert(
-        'Welcome back!',
-        'Your data will now sync across all your devices.',
-        [{ text: 'OK', onPress: onAuthSuccess }]
-      );
-    } else {
-      Alert.alert('Sign In Failed', result.error);
+        // Call success callback immediately - Alert may not work in web
+        if (onAuthSuccess) {
+          onAuthSuccess();
+        }
+
+        // Show alert after callback (for native platforms)
+        Alert.alert(
+          'Welcome back!',
+          'Your data will now sync across all your devices.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Sign In Failed', result.error || 'Unknown error occurred');
+        console.error('Sign in error:', result);
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Sign in exception:', error);
+      Alert.alert('Sign In Failed', error.message || 'An unexpected error occurred');
     }
   };
 
@@ -69,36 +83,68 @@ export default function AuthScreen({ onAuthSuccess }) {
     if (!validateInputs()) return;
 
     setLoading(true);
-    const result = await signUp(email, password, displayName);
-    setLoading(false);
+    try {
+      const result = await signUp(email, password, displayName);
+      setLoading(false);
 
-    if (result.success) {
-      // Enable cloud sync
-      await setCloudSync(true);
+      if (result.success) {
+        // Enable cloud sync
+        await setCloudSync(true);
 
-      Alert.alert(
-        'Account Created!',
-        'Your account has been created successfully. Your data will sync across devices.',
-        [{ text: 'Get Started', onPress: onAuthSuccess }]
-      );
-    } else {
-      Alert.alert('Sign Up Failed', result.error);
+        // Call success callback immediately - Alert may not work in web
+        if (onAuthSuccess) {
+          onAuthSuccess();
+        }
+
+        // Show alert after callback (for native platforms)
+        Alert.alert(
+          'Account Created!',
+          'Your account has been created successfully. Your data will sync across devices.',
+          [{ text: 'Get Started' }]
+        );
+      } else {
+        Alert.alert('Sign Up Failed', result.error || 'Unknown error occurred');
+        console.error('Sign up error:', result);
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Sign up exception:', error);
+      Alert.alert('Sign Up Failed', error.message || 'An unexpected error occurred');
     }
   };
 
-  const handleSkip = () => {
-    Alert.alert(
-      'Continue without account?',
-      'Your data will only be saved on this device. You can create an account later to sync across devices.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: onAuthSuccess,
-        },
-      ]
-    );
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      setLoading(false);
+
+      if (result.success) {
+        // Enable cloud sync
+        await setCloudSync(true);
+
+        // Call success callback immediately
+        if (onAuthSuccess) {
+          onAuthSuccess();
+        }
+
+        // Show alert after callback
+        Alert.alert(
+          'Welcome!',
+          'You have successfully signed in with Google. Your data will now sync across all your devices.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Google Sign-In Failed', result.error || 'Unknown error occurred');
+        console.error('Google sign-in error:', result);
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error('Google sign-in exception:', error);
+      Alert.alert('Google Sign-In Failed', error.message || 'An unexpected error occurred');
+    }
   };
+
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -110,6 +156,30 @@ export default function AuthScreen({ onAuthSuccess }) {
       </View>
 
       <View style={styles.form}>
+        {/* Google Sign-In Button */}
+        <TouchableOpacity
+          style={[styles.googleButton, loading && styles.buttonDisabled]}
+          onPress={handleGoogleSignIn}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#4285F4" />
+          ) : (
+            <>
+              <Text style={styles.googleIcon}>G</Text>
+              <Text style={styles.googleButtonText}>
+                {isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
         {isSignUp && (
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Name (optional)</Text>
@@ -190,14 +260,6 @@ export default function AuthScreen({ onAuthSuccess }) {
               ? 'Already have an account? Sign In'
               : "Don't have an account? Sign Up"}
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={handleSkip}
-          disabled={loading}
-        >
-          <Text style={styles.skipButtonText}>Skip for now</Text>
         </TouchableOpacity>
 
         <View style={styles.benefitsCard}>
@@ -288,6 +350,56 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   skipButtonText: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4285F4',
+    marginRight: 12,
+    width: 24,
+    height: 24,
+    textAlign: 'center',
+    lineHeight: 24,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4285F4',
+  },
+  googleButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#d1d5db',
+  },
+  dividerText: {
+    marginHorizontal: 12,
     color: '#6b7280',
     fontSize: 14,
   },

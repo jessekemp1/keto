@@ -10,12 +10,19 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, isFirebaseReady } from '../config/firebase';
 
 /**
  * Save or update user profile
  */
 export const saveUserProfile = async (userId, profile) => {
+  if (!isFirebaseReady() || !db) {
+    return {
+      success: false,
+      error: 'Firebase is not configured',
+    };
+  }
+
   try {
     const userRef = doc(db, 'users', userId);
     await setDoc(userRef, {
@@ -36,6 +43,13 @@ export const saveUserProfile = async (userId, profile) => {
  * Get user profile
  */
 export const getUserProfile = async (userId) => {
+  if (!isFirebaseReady() || !db) {
+    return {
+      success: false,
+      error: 'Firebase is not configured',
+    };
+  }
+
   try {
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
@@ -64,6 +78,13 @@ export const getUserProfile = async (userId) => {
  * Save daily metric
  */
 export const saveDailyMetric = async (userId, metric) => {
+  if (!isFirebaseReady() || !db) {
+    return {
+      success: false,
+      error: 'Firebase is not configured',
+    };
+  }
+
   try {
     const metricRef = doc(db, 'users', userId, 'metrics', metric.date);
     await setDoc(metricRef, {
@@ -84,6 +105,14 @@ export const saveDailyMetric = async (userId, metric) => {
  * Get all metrics for a user
  */
 export const getAllMetrics = async (userId) => {
+  if (!isFirebaseReady() || !db) {
+    return {
+      success: false,
+      error: 'Firebase is not configured',
+      metrics: [],
+    };
+  }
+
   try {
     const metricsRef = collection(db, 'users', userId, 'metrics');
     const q = query(metricsRef, orderBy('date', 'desc'));
