@@ -363,12 +363,30 @@ export default function HomeScreen({ navigation }) {
               bezier
               style={styles.chart}
             />
-            {/* Ketosis threshold line at ratio 40 */}
+            {/* Ketosis threshold line at ratio 40 - constrained to inside graph area */}
             {(() => {
               if (!chartData || chartData.datasets[0].data.length === 0) return null;
               
               const chartHeight = 180;
               const chartWidth = screenWidth - 48;
+              
+              // Chart library uses padding for axes:
+              // - Left padding (Y-axis): ~40px
+              // - Right padding: ~10px
+              // - Top padding: ~30px
+              // - Bottom padding (X-axis): ~10px
+              const leftPadding = 40; // Y-axis takes space on left
+              const rightPadding = 10;
+              const topPadding = 30;
+              const bottomPadding = 10;
+              
+              // Additional indentation to keep line well within graph area
+              const additionalIndent = 8;
+              
+              // Calculate inner graph area boundaries with extra indentation
+              const innerXStart = leftPadding + additionalIndent;
+              const innerXEnd = chartWidth - rightPadding - additionalIndent;
+              const innerHeight = chartHeight - topPadding - bottomPadding;
               
               // 87 showed at 37, need to move up 3 points to get to 40
               // Decreasing by ~4-5px should move it from 37 to 40
@@ -382,9 +400,9 @@ export default function HomeScreen({ navigation }) {
                   pointerEvents="none"
                 >
                   <Line
-                    x1={0}
+                    x1={innerXStart}
                     y1={yPosition}
-                    x2={chartWidth}
+                    x2={innerXEnd}
                     y2={yPosition}
                     stroke="rgba(100, 200, 255, 0.7)"
                     strokeWidth={2}
