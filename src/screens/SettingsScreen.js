@@ -7,6 +7,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -15,10 +17,12 @@ import { exportMetricsToCSV } from '../utils/storage';
 
 export default function SettingsScreen() {
   const { user, signOut: contextSignOut, loading: authLoading } = useAuth();
-  const { theme, themeName, changeTheme, availableThemes } = useTheme();
+  const { theme, themeName, changeTheme, availableThemes, updateCustomTheme } = useTheme();
   const [showAuth, setShowAuth] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [customColors, setCustomColors] = useState(theme.colors);
 
   const handleSignOut = async () => {
     // For web, use window.confirm instead of Alert.alert which may not work
@@ -130,7 +134,14 @@ export default function SettingsScreen() {
                   borderWidth: 2,
                 }
               ]}
-              onPress={() => changeTheme(availableTheme.name)}
+              onPress={() => {
+                if (availableTheme.name === 'Custom') {
+                  setShowCustomize(true);
+                  setCustomColors(availableTheme.colors || theme.colors);
+                } else {
+                  changeTheme(availableTheme.name);
+                }
+              }}
             >
               <View style={styles.themePreview}>
                 <View style={[styles.themeColorBox, { backgroundColor: availableTheme.colors.background }]} />
@@ -149,6 +160,38 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
           ))}
+          
+          {/* Custom Theme Button */}
+          {!availableThemes.find(t => t.name === 'Custom') && (
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                { 
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  borderStyle: 'dashed',
+                }
+              ]}
+              onPress={() => {
+                setShowCustomize(true);
+                setCustomColors(theme.colors);
+              }}
+            >
+              <View style={styles.themePreview}>
+                <View style={[styles.themeColorBox, { backgroundColor: theme.colors.background }]} />
+                <View style={[styles.themeColorBox, { backgroundColor: theme.colors.card }]} />
+                <View style={[styles.themeColorBox, { backgroundColor: theme.colors.accent }]} />
+              </View>
+              <View style={styles.themeInfo}>
+                <Text style={[styles.themeName, { color: theme.colors.text }]}>
+                  Custom
+                </Text>
+                <Text style={[styles.themeSelected, { color: theme.colors.textSecondary, fontSize: 12 }]}>
+                  Create your own
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Account Section */}
@@ -267,6 +310,76 @@ export default function SettingsScreen() {
           </View>
         </View>
       </View>
+      
+      {/* Custom Theme Customization Modal */}
+      <Modal
+        visible={showCustomize}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCustomize(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Customize Theme</Text>
+              <TouchableOpacity
+                onPress={() => setShowCustomize(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={[styles.modalCloseText, { color: theme.colors.textSecondary }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.customizeScroll}>
+              {Object.entries(customColors).map(([key, value]) => (
+                <View key={key} style={styles.colorInputRow}>
+                  <Text style={[styles.colorLabel, { color: theme.colors.text }]}>
+                    {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                  </Text>
+                  <View style={styles.colorInputContainer}>
+                    <View style={[styles.colorPreview, { backgroundColor: value }]} />
+                    <TextInput
+                      style={[styles.colorInput, { 
+                        backgroundColor: theme.colors.background,
+                        borderColor: theme.colors.border,
+                        color: theme.colors.text
+                      }]}
+                      value={value}
+                      onChangeText={(text) => {
+                        if (/^#[0-9A-Fa-f]{0,6}$/.test(text)) {
+                          setCustomColors({ ...customColors, [key]: text });
+                        }
+                      }}
+                      placeholder="#000000"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      maxLength={7}
+                    />
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            
+            <View style={[styles.modalActions, { borderTopColor: theme.colors.border }]}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton, { borderColor: theme.colors.border }]}
+                onPress={() => setShowCustomize(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSaveButton, { backgroundColor: theme.colors.accent }]}
+                onPress={() => {
+                  updateCustomTheme(customColors);
+                  setShowCustomize(false);
+                  Alert.alert('Success', 'Custom theme saved!');
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: '#ffffff' }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -421,5 +534,91 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalCloseText: {
+    fontSize: 24,
+    fontWeight: '300',
+  },
+  customizeScroll: {
+    maxHeight: 400,
+    padding: 20,
+  },
+  colorInputRow: {
+    marginBottom: 16,
+  },
+  colorLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  colorInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  colorPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  colorInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    borderWidth: 1,
+  },
+  modalSaveButton: {
+    // backgroundColor set dynamically
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

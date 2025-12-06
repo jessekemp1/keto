@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
+import Svg, { Line } from 'react-native-svg';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useTheme } from '../contexts/ThemeContext';
 import {
@@ -128,10 +129,12 @@ export default function HomeScreen({ navigation }) {
   }
 
   const phase = PHASES[profile.currentPhase];
-  const daysInPhase = differenceInDays(
-    new Date(),
-    parseISO(profile.phaseStartDate)
-  );
+  
+  // Calculate days from first log entry instead of phase start date
+  const firstEntryDate = allMetrics.length > 0 
+    ? new Date(Math.min(...allMetrics.map(m => new Date(m.date).getTime())))
+    : new Date();
+  const daysInPhase = differenceInDays(new Date(), firstEntryDate);
   const daysTotal = phase.duration || '∞';
   const ratio = todayMetric?.drBozRatio;
 
@@ -147,7 +150,12 @@ export default function HomeScreen({ navigation }) {
     labels: recentMetrics.map((m) => format(parseISO(m.date), 'MM/dd')),
     datasets: [{
       data: recentMetrics.map((m) => m.drBozRatio || 0),
-      color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`,
+      color: (opacity = 1) => {
+        // Use average color for the line, or accent color as fallback
+        const avgRatio = recentMetrics.reduce((sum, m) => sum + (m.drBozRatio || 0), 0) / recentMetrics.length;
+        const rgb = hexToRgb(getRatioColor(avgRatio));
+        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+      },
       strokeWidth: 2,
     }],
     ratios: recentMetrics.map((m) => m.drBozRatio),
@@ -174,7 +182,10 @@ export default function HomeScreen({ navigation }) {
       showsVerticalScrollIndicator={false}
     >
       {/* Phase Section with Integrated Metrics */}
-      <View style={[styles.heroSection, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.heroSection, { 
+        backgroundColor: theme.colors.accentBackground || theme.colors.card,
+        shadowColor: theme.colors.shadow 
+      }]}>
         <View style={[styles.phaseBadge, { backgroundColor: theme.colors.accentBackground }]}>
           <Text style={[styles.phaseBadgeText, { color: theme.colors.accent }]}>Phase {profile.currentPhase}</Text>
         </View>
@@ -303,49 +314,86 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.chartTitle, { color: theme.colors.text }]}>Progress</Text>
             <Text style={[styles.chartSubtitle, { color: theme.colors.textSecondary }]}>Last 30 days</Text>
           </View>
-          <LineChart
-            data={chartData}
-            width={screenWidth - 48}
-            height={180}
-            withDots={true}
-            withShadow={false}
-            chartConfig={{
-              backgroundColor: 'transparent',
-              backgroundGradientFrom: 'transparent',
-              backgroundGradientTo: 'transparent',
-              decimalPlaces: 0,
-              color: (opacity = 1) => {
-                const rgb = hexToRgb(theme.colors.accent);
-                return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
-              },
-              labelColor: (opacity = 1) => {
-                const rgb = hexToRgb(theme.colors.textSecondary);
-                return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
-              },
-              style: {
-                borderRadius: 0,
-              },
-              propsForDots: (dataPoint, index) => {
-                const ratio = chartData.ratios && chartData.ratios[index];
-                const color = ratio !== null && ratio !== undefined 
-                  ? getRatioColor(ratio) 
-                  : theme.colors.textSecondary;
-                return {
-                  r: '4',
-                  strokeWidth: '2',
-                  stroke: color,
-                  fill: color,
-                };
-              },
-              propsForBackgroundLines: {
-                strokeDasharray: '',
-                stroke: theme.colors.border,
-                strokeWidth: 1,
-              },
-            }}
-            bezier
-            style={styles.chart}
-          />
+          <View style={styles.chartContainer}>
+            <LineChart
+              data={chartData}
+              width={screenWidth - 48}
+              height={180}
+              withDots={true}
+              withShadow={false}
+              chartConfig={{
+                backgroundColor: 'transparent',
+                backgroundGradientFrom: 'transparent',
+                backgroundGradientTo: 'transparent',
+                decimalPlaces: 0,
+                color: (opacity = 1) => {
+                  const avgRatio = chartData.datasets[0].data.reduce((sum, val) => sum + (val || 0), 0) / chartData.datasets[0].data.filter(v => v !== null && v !== undefined).length;
+                  const rgb = hexToRgb(getRatioColor(avgRatio));
+                  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+                },
+                labelColor: (opacity = 1) => {
+                  const rgb = hexToRgb(theme.colors.textSecondary);
+                  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+                },
+                style: {
+                  borderRadius: 0,
+                },
+                propsForDots: (dataPoint, index) => {
+                  // Get the ratio for this specific data point - use the actual data value
+                  const ratio = chartData.datasets[0].data[index];
+                  
+                  // Use getRatioColor to ensure exact color matching with legend
+                  const color = ratio !== null && ratio !== undefined && ratio > 0
+                    ? getRatioColor(ratio)
+                    : theme.colors.textSecondary;
+                  
+                  return {
+                    r: '5',
+                    strokeWidth: '2',
+                    stroke: color,
+                    fill: color,
+                  };
+                },
+                propsForBackgroundLines: {
+                  strokeDasharray: '',
+                  stroke: theme.colors.border,
+                  strokeWidth: 1,
+                },
+              }}
+              bezier
+              style={styles.chart}
+            />
+            {/* Ketosis threshold line at ratio 40 */}
+            {(() => {
+              if (!chartData || chartData.datasets[0].data.length === 0) return null;
+              
+              const chartHeight = 180;
+              const chartWidth = screenWidth - 48;
+              
+              // 87 showed at 37, need to move up 3 points to get to 40
+              // Decreasing by ~4-5px should move it from 37 to 40
+              const yPosition = 82;
+              
+              return (
+                <Svg
+                  style={styles.ketosisLineSvg}
+                  height={chartHeight}
+                  width={chartWidth}
+                  pointerEvents="none"
+                >
+                  <Line
+                    x1={0}
+                    y1={yPosition}
+                    x2={chartWidth}
+                    y2={yPosition}
+                    stroke="rgba(100, 200, 255, 0.7)"
+                    strokeWidth={2}
+                    strokeDasharray="5,5"
+                  />
+                </Svg>
+              );
+            })()}
+          </View>
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: theme.colors.success }]} />
@@ -440,10 +488,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   heroSection: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 20,
     padding: 24,
     paddingTop: 32,
     paddingBottom: 32,
-    borderBottomWidth: 1,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   phaseBadge: {
     alignSelf: 'flex-start',
@@ -640,8 +695,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  chartContainer: {
+    position: 'relative',
+  },
   chart: {
     marginVertical: 8,
+  },
+  ketosisLineSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    pointerEvents: 'none',
+    zIndex: 100,
+    elevation: 100, // For Android
   },
   legend: {
     flexDirection: 'row',

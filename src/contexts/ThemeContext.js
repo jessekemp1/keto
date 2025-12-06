@@ -21,22 +21,6 @@ const themes = {
       error: '#ef4444',
     },
   },
-  'Terminal Green': {
-    name: 'Terminal Green',
-    colors: {
-      background: '#0a4a0a',
-      card: '#1a3a1a',
-      text: '#00ff88',
-      textSecondary: '#00cc66',
-      accent: '#00cc66',
-      accentBackground: '#003300',
-      border: '#1a5a1a',
-      shadow: '#000',
-      success: '#00cc66',
-      warning: '#ccaa00',
-      error: '#cc4400',
-    },
-  },
   'Terminal Gray': {
     name: 'Terminal Gray',
     colors: {
